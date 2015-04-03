@@ -87,6 +87,63 @@ static void fft_forward_radix8_p1(complex<float> *output, const complex<float> *
    }
 }
 
+static void fft_forward_radix8_generic(complex<float> *output, const complex<float> *input,
+      const complex<float> *twiddles, unsigned p, unsigned samples)
+{
+   unsigned octa_samples = samples >> 3;
+   for (unsigned i = 0; i < octa_samples; i++)
+   {
+      unsigned k = i & (p - 1);
+      auto a = input[i];
+      auto b = input[i + octa_samples];
+      auto c = input[i + 2 * octa_samples];
+      auto d = input[i + 3 * octa_samples];
+      auto e = twiddles[k] * input[i + 4 * octa_samples];
+      auto f = twiddles[k] * input[i + 5 * octa_samples];
+      auto g = twiddles[k] * input[i + 6 * octa_samples];
+      auto h = twiddles[k] * input[i + 7 * octa_samples];
+
+      auto r0 = a + e; // 0O + 0
+      auto r1 = a - e; // 0O + 1
+      auto r2 = b + f; // 2O + 0
+      auto r3 = b - f; // 2O + 1
+      auto r4 = c + g; // 4O + 0
+      auto r5 = c - g; // 4O + 1
+      auto r6 = d + h; // 60 + 0
+      auto r7 = d - h; // 6O + 1
+
+      r4 *= twiddles[p + k];
+      r5 *= twiddles[p + k + p];
+      r6 *= twiddles[p + k];
+      r7 *= twiddles[p + k + p];
+
+      a = r0 + r4; // 0O + 0
+      b = r1 + r5; // 0O + 1
+      c = r0 - r4; // 00 + 2
+      d = r1 - r5; // O0 + 3
+      e = r2 + r6; // 4O + 0
+      f = r3 + r7; // 4O + 1
+      g = r2 - r6; // 4O + 2
+      h = r3 - r7; // 4O + 3
+
+      // p == 4 twiddles
+      e *= twiddles[3 * p + k];
+      f *= twiddles[3 * p + k + p];
+      g *= twiddles[3 * p + k + 2 * p];
+      h *= twiddles[3 * p + k + 3 * p];
+
+      unsigned j = ((i - k) << 3) + k;
+      output[j + 0 * p] = a + e;
+      output[j + 1 * p] = b + f;
+      output[j + 2 * p] = c + g;
+      output[j + 3 * p] = d + h;
+      output[j + 4 * p] = a - e;
+      output[j + 5 * p] = b - f;
+      output[j + 6 * p] = c - g;
+      output[j + 7 * p] = d - h;
+   }
+}
+
 static void fft_forward_radix4_p1(complex<float> *output, const complex<float> *input,
       unsigned samples)
 {
@@ -417,16 +474,14 @@ int main()
 
       fft_forward_radix8_p1(tmp0, input, pt, N);
       pt += 8;
-      fft_forward_radix2_generic(tmp1, tmp0, pt, 8, N);
-      pt += 8;
-      auto *out = tmp0;
-      auto *in = tmp1;
+      auto *out = tmp1;
+      auto *in = tmp0;
 
-      for (unsigned p = 16; p < N; p <<= 2)
+      for (unsigned p = 8; p < N; p <<= 3)
       {
-         fft_forward_radix4_generic(out, in, pt, p, N);
+         fft_forward_radix8_generic(out, in, pt, p, N);
          swap(out, in);
-         pt += p * 3;
+         pt += p * 7;
       }
 
 #if DEBUG
