@@ -10,6 +10,7 @@
 #define ITERATIONS 1
 #define RADIX2 1
 #define RADIX4 1
+#define RADIX8 1
 #define FFTW 1
 #define DEBUG 1
 
@@ -29,6 +30,61 @@ static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
    auto r2 = _mm256_movehdup_ps(b);
    auto R1 = _mm256_mul_ps(r2, r3);
    return _mm256_addsub_ps(R0, R1);
+}
+
+static void fft_forward_radix8_p1(complex<float> *output, const complex<float> *input,
+      const complex<float> *twiddles, unsigned samples)
+{
+   unsigned octa_samples = samples >> 3;
+   for (unsigned i = 0; i < octa_samples; i++)
+   {
+      auto a = input[i];
+      auto b = input[i + octa_samples];
+      auto c = input[i + 2 * octa_samples];
+      auto d = input[i + 3 * octa_samples];
+      auto e = input[i + 4 * octa_samples];
+      auto f = input[i + 5 * octa_samples];
+      auto g = input[i + 6 * octa_samples];
+      auto h = input[i + 7 * octa_samples];
+
+      auto r0 = a + e; // 0O + 0
+      auto r1 = a - e; // 0O + 1
+      auto r2 = b + f; // 2O + 0
+      auto r3 = b - f; // 2O + 1
+      auto r4 = c + g; // 4O + 0
+      auto r5 = c - g; // 4O + 1
+      auto r6 = d + h; // 60 + 0
+      auto r7 = d - h; // 6O + 1
+
+      // p == 2 twiddles
+      r5 = complex<float>(r5.imag(), -r5.real());
+      r7 = complex<float>(r7.imag(), -r7.real());
+
+      a = r0 + r4; // 0O + 0
+      b = r1 + r5; // 0O + 1
+      c = r0 - r4; // 00 + 2
+      d = r1 - r5; // O0 + 3
+      e = r2 + r6; // 4O + 0
+      f = r3 + r7; // 4O + 1
+      g = r2 - r6; // 4O + 2
+      h = r3 - r7; // 4O + 3
+
+      // p == 4 twiddles
+      e *= twiddles[4];
+      f *= twiddles[5];
+      g *= twiddles[6];
+      h *= twiddles[7];
+
+      unsigned j = i << 3;
+      output[j + 0] = a + e;
+      output[j + 1] = b + f;
+      output[j + 2] = c + g;
+      output[j + 3] = d + h;
+      output[j + 4] = a - e;
+      output[j + 5] = b - f;
+      output[j + 6] = c - g;
+      output[j + 7] = d - h;
+   }
 }
 
 static void fft_forward_radix4_p1(complex<float> *output, const complex<float> *input,
@@ -346,8 +402,36 @@ int main()
       }
 
 #if DEBUG
-      for (unsigned i = 0; i < 256; i++)
+      for (unsigned i = 0; i < N; i++)
          printf("Radix-4 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
+#endif
+   }
+#endif
+
+#if RADIX8
+   // Radix-8
+
+   for (unsigned i = 0; i < ITERATIONS; i++)
+   {
+      pt = twiddles;
+
+      fft_forward_radix8_p1(tmp0, input, pt, N);
+      pt += 8;
+      fft_forward_radix2_generic(tmp1, tmp0, pt, 8, N);
+      pt += 8;
+      auto *out = tmp0;
+      auto *in = tmp1;
+
+      for (unsigned p = 16; p < N; p <<= 2)
+      {
+         fft_forward_radix4_generic(out, in, pt, p, N);
+         swap(out, in);
+         pt += p * 3;
+      }
+
+#if DEBUG
+      for (unsigned i = 0; i < N; i++)
+         printf("Radix-8 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
 #endif
    }
 #endif
