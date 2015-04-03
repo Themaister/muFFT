@@ -14,6 +14,8 @@
 #define FFTW 1
 #define DEBUG 1
 
+#define M_SQRT_2 0.707106781186547524401
+
 using namespace std;
 
 static inline complex<float> twiddle(int direction, int k, int p)
@@ -32,9 +34,87 @@ static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
    return _mm256_addsub_ps(R0, R1);
 }
 
-static void fft_forward_radix8_p1(complex<float> *output, const complex<float> *input,
+void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned samples)
 {
+   const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
+   const auto w_f = _mm256_set_ps(-M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2);
+   const auto w_h = _mm256_set_ps(-M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2);
+
+   unsigned octa_samples = samples >> 3;
+   for (unsigned i = 0; i < octa_samples; i += 4)
+   {
+      auto a = _mm256_load_ps((const float*)&input[i]);
+      auto b = _mm256_load_ps((const float*)&input[i + octa_samples]);
+      auto c = _mm256_load_ps((const float*)&input[i + 2 * octa_samples]);
+      auto d = _mm256_load_ps((const float*)&input[i + 3 * octa_samples]);
+      auto e = _mm256_load_ps((const float*)&input[i + 4 * octa_samples]);
+      auto f = _mm256_load_ps((const float*)&input[i + 5 * octa_samples]);
+      auto g = _mm256_load_ps((const float*)&input[i + 6 * octa_samples]);
+      auto h = _mm256_load_ps((const float*)&input[i + 7 * octa_samples]);
+
+      auto r0 = _mm256_add_ps(a, e); // 0O + 0
+      auto r1 = _mm256_sub_ps(a, e); // 0O + 1
+      auto r2 = _mm256_add_ps(b, f); // 0O + 0
+      auto r3 = _mm256_sub_ps(b, f); // 0O + 1
+      auto r4 = _mm256_add_ps(c, g); // 0O + 0
+      auto r5 = _mm256_sub_ps(c, g); // 0O + 1
+      auto r6 = _mm256_add_ps(d, h); // 0O + 0
+      auto r7 = _mm256_sub_ps(d, h); // 0O + 1
+      r5 = _mm256_xor_ps(_mm256_permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+      r7 = _mm256_xor_ps(_mm256_permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+
+      a = _mm256_add_ps(r0, r4);
+      b = _mm256_add_ps(r1, r5);
+      c = _mm256_sub_ps(r0, r4);
+      d = _mm256_sub_ps(r1, r5);
+      e = _mm256_add_ps(r2, r6);
+      f = _mm256_add_ps(r3, r7);
+      g = _mm256_sub_ps(r2, r6);
+      h = _mm256_sub_ps(r3, r7);
+
+      f = _mm256_cmul_ps(f, w_f);
+      g = _mm256_xor_ps(_mm256_permute_ps(g, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); // -j
+      h = _mm256_cmul_ps(h, w_h);
+
+      auto o0 = _mm256_add_ps(a, e); // { 0, 8, ... }
+      auto o1 = _mm256_add_ps(b, f); // { 1, 9, ... }
+      auto o2 = _mm256_add_ps(c, g); // { 2, 10, ... }
+      auto o3 = _mm256_add_ps(d, h); // { 3, 11, ... }
+      auto o4 = _mm256_sub_ps(a, e); // { 4, 12, ... }
+      auto o5 = _mm256_sub_ps(b, f); // { 5, 13, ... }
+      auto o6 = _mm256_sub_ps(c, g); // { 6, 14, ... }
+      auto o7 = _mm256_sub_ps(d, h); // { 7, 15, ... }
+
+      auto o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1); // { 0, 1, 16, 17 }
+      auto o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1); // { 8, 9, 24, 25 }
+      auto o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3); // { 2, 3, 18, 19 }
+      auto o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3); // { 10, 11, 26, 27 }
+      auto o4o5_lo = (__m256)_mm256_unpacklo_pd((__m256d)o4, (__m256d)o5); // { 4, 5, 20, 21 }
+      auto o4o5_hi = (__m256)_mm256_unpackhi_pd((__m256d)o4, (__m256d)o5); // { 12, 13, 28, 29 }
+      auto o6o7_lo = (__m256)_mm256_unpacklo_pd((__m256d)o6, (__m256d)o7); // { 6, 7, 22, 23 }
+      auto o6o7_hi = (__m256)_mm256_unpackhi_pd((__m256d)o6, (__m256d)o7); // { 14, 15, 30, 31 }
+      o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0)); // { 0, 1, 2, 3 }
+      o1 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (2 << 4) | (0 << 0)); // { 4, 5, 6, 7 }
+      o2 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0)); // { 8, 9, 10, 11 }
+      o3 = _mm256_permute2f128_ps(o4o5_hi, o6o7_hi, (2 << 4) | (0 << 0)); // { 12, 13, 14, 15 }
+      o4 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0)); // ...
+      o5 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (3 << 4) | (1 << 0));
+      o6 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0));
+      o7 = _mm256_permute2f128_ps(o4o5_hi, o6o7_hi, (3 << 4) | (1 << 0));
+
+      unsigned j = i << 3;
+      _mm256_store_ps((float*)&output[j +  0], o0);
+      _mm256_store_ps((float*)&output[j +  4], o1);
+      _mm256_store_ps((float*)&output[j +  8], o2);
+      _mm256_store_ps((float*)&output[j + 12], o3);
+      _mm256_store_ps((float*)&output[j + 16], o4);
+      _mm256_store_ps((float*)&output[j + 20], o5);
+      _mm256_store_ps((float*)&output[j + 24], o6);
+      _mm256_store_ps((float*)&output[j + 28], o7);
+   }
+
+#if 0
    unsigned octa_samples = samples >> 3;
    for (unsigned i = 0; i < octa_samples; i++)
    {
@@ -85,11 +165,86 @@ static void fft_forward_radix8_p1(complex<float> *output, const complex<float> *
       output[j + 6] = c - g;
       output[j + 7] = d - h;
    }
+#endif
 }
 
 static void fft_forward_radix8_generic(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned p, unsigned samples)
 {
+   unsigned octa_samples = samples >> 3;
+   for (unsigned i = 0; i < octa_samples; i += 4)
+   {
+      unsigned k = i & (p - 1);
+      const auto w = _mm256_load_ps((const float*)&twiddles[k]);
+      auto a = _mm256_load_ps((const float*)&input[i]);
+      auto b = _mm256_load_ps((const float*)&input[i + octa_samples]);
+      auto c = _mm256_load_ps((const float*)&input[i + 2 * octa_samples]);
+      auto d = _mm256_load_ps((const float*)&input[i + 3 * octa_samples]);
+      auto e = _mm256_load_ps((const float*)&input[i + 4 * octa_samples]);
+      auto f = _mm256_load_ps((const float*)&input[i + 5 * octa_samples]);
+      auto g = _mm256_load_ps((const float*)&input[i + 6 * octa_samples]);
+      auto h = _mm256_load_ps((const float*)&input[i + 7 * octa_samples]);
+
+      e = _mm256_cmul_ps(e, w);
+      f = _mm256_cmul_ps(f, w);
+      g = _mm256_cmul_ps(g, w);
+      h = _mm256_cmul_ps(h, w);
+
+      auto r0 = _mm256_add_ps(a, e); // 0O + 0
+      auto r1 = _mm256_sub_ps(a, e); // 0O + 1
+      auto r2 = _mm256_add_ps(b, f); // 0O + 0
+      auto r3 = _mm256_sub_ps(b, f); // 0O + 1
+      auto r4 = _mm256_add_ps(c, g); // 0O + 0
+      auto r5 = _mm256_sub_ps(c, g); // 0O + 1
+      auto r6 = _mm256_add_ps(d, h); // 0O + 0
+      auto r7 = _mm256_sub_ps(d, h); // 0O + 1
+
+      const auto w0 = _mm256_load_ps((const float*)&twiddles[p + k]);
+      const auto w1 = _mm256_load_ps((const float*)&twiddles[2 * p + k]);
+      r4 = _mm256_cmul_ps(r4, w0);
+      r5 = _mm256_cmul_ps(r5, w1);
+      r6 = _mm256_cmul_ps(r6, w0);
+      r7 = _mm256_cmul_ps(r7, w1);
+
+      a = _mm256_add_ps(r0, r4);
+      b = _mm256_add_ps(r1, r5);
+      c = _mm256_sub_ps(r0, r4);
+      d = _mm256_sub_ps(r1, r5);
+      e = _mm256_add_ps(r2, r6);
+      f = _mm256_add_ps(r3, r7);
+      g = _mm256_sub_ps(r2, r6);
+      h = _mm256_sub_ps(r3, r7);
+
+      const auto we = _mm256_load_ps((const float*)&twiddles[3 * p + k]);
+      const auto wf = _mm256_load_ps((const float*)&twiddles[3 * p + k + p]);
+      const auto wg = _mm256_load_ps((const float*)&twiddles[3 * p + k + 2 * p]);
+      const auto wh = _mm256_load_ps((const float*)&twiddles[3 * p + k + 3 * p]);
+      e = _mm256_cmul_ps(e, we);
+      f = _mm256_cmul_ps(f, wf);
+      g = _mm256_cmul_ps(g, wg);
+      h = _mm256_cmul_ps(h, wh);
+
+      auto o0 = _mm256_add_ps(a, e);
+      auto o1 = _mm256_add_ps(b, f);
+      auto o2 = _mm256_add_ps(c, g);
+      auto o3 = _mm256_add_ps(d, h);
+      auto o4 = _mm256_sub_ps(a, e);
+      auto o5 = _mm256_sub_ps(b, f);
+      auto o6 = _mm256_sub_ps(c, g);
+      auto o7 = _mm256_sub_ps(d, h);
+
+      unsigned j = ((i - k) << 3) + k;
+      _mm256_store_ps((float*)&output[j + 0 * p], o0);
+      _mm256_store_ps((float*)&output[j + 1 * p], o1);
+      _mm256_store_ps((float*)&output[j + 2 * p], o2);
+      _mm256_store_ps((float*)&output[j + 3 * p], o3);
+      _mm256_store_ps((float*)&output[j + 4 * p], o4);
+      _mm256_store_ps((float*)&output[j + 5 * p], o5);
+      _mm256_store_ps((float*)&output[j + 6 * p], o6);
+      _mm256_store_ps((float*)&output[j + 7 * p], o7);
+   }
+
+#if 0
    unsigned octa_samples = samples >> 3;
    for (unsigned i = 0; i < octa_samples; i++)
    {
@@ -142,6 +297,7 @@ static void fft_forward_radix8_generic(complex<float> *output, const complex<flo
       output[j + 6 * p] = c - g;
       output[j + 7 * p] = d - h;
    }
+#endif
 }
 
 static void fft_forward_radix4_p1(complex<float> *output, const complex<float> *input,
@@ -163,20 +319,20 @@ static void fft_forward_radix4_p1(complex<float> *output, const complex<float> *
       auto r3 = _mm256_sub_ps(b, d);
       r3 = _mm256_xor_ps(_mm256_permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
 
-      auto o0 = _mm256_add_ps(r0, r2);
-      auto o1 = _mm256_add_ps(r1, r3);
-      auto o2 = _mm256_sub_ps(r0, r2);
-      auto o3 = _mm256_sub_ps(r1, r3);
+      auto o0 = _mm256_add_ps(r0, r2); // { 0, 4, 8, 12 }
+      auto o1 = _mm256_add_ps(r1, r3); // { 1, 5, 9, 13 }
+      auto o2 = _mm256_sub_ps(r0, r2); // { 2, 6, 10, 14 }
+      auto o3 = _mm256_sub_ps(r1, r3); // { 3, 7, 11, 15 }
 
       // Transpose
-      auto o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1);
-      auto o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1);
-      auto o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3);
-      auto o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3);
-      o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0));
-      o1 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0));
-      o2 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0));
-      o3 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0));
+      auto o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1); // { 0, 1, 8, 9 }
+      auto o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1); // { 4, 5, 12, 13 }
+      auto o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3); // { 2, 3, 10, 11 }
+      auto o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3); // { 6, 7, 14, 15 }
+      o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0));  // { 0, 1, 2, 3 }
+      o1 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0));  // { 4, 5, 6, 7 }
+      o2 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0));  // { 8, 9, 10, 11 }
+      o3 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0));  // { 12, 13, 14, 15 }
 
       unsigned j = i << 2;
       _mm256_store_ps((float*)&output[j +  0], o0);
@@ -293,14 +449,16 @@ static void fft_forward_radix2_p1(complex<float> *output, const complex<float> *
       auto a = _mm256_load_ps((const float*)&input[i]);
       auto b = _mm256_load_ps((const float*)&input[i + half_samples]);
 
-      auto r0 = _mm256_add_ps(a, b);
-      auto r1 = _mm256_sub_ps(a, b);
-      a = (__m256)_mm256_unpacklo_pd((__m256d)r0, (__m256d)r1);
-      b = (__m256)_mm256_unpackhi_pd((__m256d)r0, (__m256d)r1);
+      auto r0 = _mm256_add_ps(a, b); // { 0, 2, 4, 6 }
+      auto r1 = _mm256_sub_ps(a, b); // { 1, 3, 5, 7 }
+      a = (__m256)_mm256_unpacklo_pd((__m256d)r0, (__m256d)r1); // { 0, 1, 4, 5 }
+      b = (__m256)_mm256_unpackhi_pd((__m256d)r0, (__m256d)r1); // { 2, 3, 6, 7 }
+      r0 = _mm256_permute2f128_ps(a, b, (2 << 4) | (0 << 0)); // { 0, 1, 2, 3 }
+      r1 = _mm256_permute2f128_ps(a, b, (3 << 4) | (1 << 0)); // { 4, 5, 6, 7 }
 
       unsigned j = i << 1;
-      _mm256_store_ps((float*)&output[j + 0], a);
-      _mm256_store_ps((float*)&output[j + 4], b);
+      _mm256_store_ps((float*)&output[j + 0], r0);
+      _mm256_store_ps((float*)&output[j + 4], r1);
    }
 
 #if 0
