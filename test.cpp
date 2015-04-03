@@ -6,13 +6,13 @@
 
 #include <fftw3.h>
 
-#define N 4096
-#define ITERATIONS 1
-#define RADIX2 1
-#define RADIX4 1
+#define N (8 * 8)
+#define ITERATIONS 100000000
+#define RADIX2 0
+#define RADIX4 0
 #define RADIX8 1
-#define FFTW 1
-#define DEBUG 1
+#define FFTW 0
+#define DEBUG 0
 
 #define M_SQRT_2 0.707106781186547524401
 
@@ -655,7 +655,7 @@ int main()
    in = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * N);
    out = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * N);
 
-   p = fftwf_plan_dft_1d(N, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_ESTIMATE);
+   p = fftwf_plan_dft_1d(N, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_MEASURE);
    if (!p)
       return 1;
 
