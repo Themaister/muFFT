@@ -5,14 +5,16 @@
 
 #include <fftw3.h>
 
-#define N (8 * 8 * 8 * 8 * 8)
-#define ITERATIONS 10000
+#define Nx (8 * 8)
+#define Ny (8 * 8)
+
+#define ITERATIONS 1
 #define RADIX2 0
 #define RADIX4 0
-#define RADIX8 0
+#define RADIX8 1
 #define FFTW 1
-#define DEBUG 0
-#define SIMD 1
+#define DEBUG 1
+#define SIMD 0
 
 #if SIMD
 #include <immintrin.h>
@@ -41,6 +43,130 @@ static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
    return _mm256_addsub_ps(R0, R1);
 }
 #endif
+
+static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> *output, const complex<float> *input,
+      const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
+{
+   unsigned octa_stride = samples_x * (samples_x >> 3);
+   unsigned octa_lines = samples_y >> 3;
+
+   for (unsigned line = 0; line < octa_lines;
+         line++, input += samples_x, output += samples_x << 3)
+   {
+      for (unsigned i = 0; i < samples_x; i++)
+      {
+         auto a = input[i];
+         auto b = input[i + octa_stride];
+         auto c = input[i + 2 * octa_stride];
+         auto d = input[i + 3 * octa_stride];
+         auto e = input[i + 4 * octa_stride];
+         auto f = input[i + 5 * octa_stride];
+         auto g = input[i + 6 * octa_stride];
+         auto h = input[i + 7 * octa_stride];
+
+         auto r0 = a + e; // 0O + 0
+         auto r1 = a - e; // 0O + 1
+         auto r2 = b + f; // 2O + 0
+         auto r3 = b - f; // 2O + 1
+         auto r4 = c + g; // 4O + 0
+         auto r5 = c - g; // 4O + 1
+         auto r6 = d + h; // 60 + 0
+         auto r7 = d - h; // 6O + 1
+
+         // p == 2 twiddles
+         r5 = complex<float>(r5.imag(), -r5.real());
+         r7 = complex<float>(r7.imag(), -r7.real());
+
+         a = r0 + r4; // 0O + 0
+         b = r1 + r5; // 0O + 1
+         c = r0 - r4; // 00 + 2
+         d = r1 - r5; // O0 + 3
+         e = r2 + r6; // 4O + 0
+         f = r3 + r7; // 4O + 1
+         g = r2 - r6; // 4O + 2
+         h = r3 - r7; // 4O + 3
+
+         // p == 4 twiddles
+         e *= twiddles[4];
+         f *= twiddles[5];
+         g *= twiddles[6];
+         h *= twiddles[7];
+
+         output[i] = a + e;
+         output[i + 1 * samples_x] = b + f;
+         output[i + 2 * samples_x] = c + g;
+         output[i + 3 * samples_x] = d + h;
+         output[i + 4 * samples_x] = a - e;
+         output[i + 5 * samples_x] = b - f;
+         output[i + 6 * samples_x] = c - g;
+         output[i + 7 * samples_x] = d - h;
+      }
+   }
+}
+
+static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<float> *output, const complex<float> *input,
+      const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+{
+   unsigned octa_stride = samples_x * (samples_x >> 3);
+   unsigned octa_lines = samples_y >> 3;
+   unsigned out_stride = p * samples_x;
+
+   for (unsigned line = 0; line < octa_lines; line++, input += samples_x)
+   {
+      unsigned k = line & (p - 1);
+      unsigned j = (((line - k) << 3) + k) * samples_x;
+
+      for (unsigned i = 0; i < samples_x; i++)
+      {
+         auto a = input[i];
+         auto b = input[i + octa_stride];
+         auto c = input[i + 2 * octa_stride];
+         auto d = input[i + 3 * octa_stride];
+         auto e = twiddles[k] * input[i + 4 * octa_stride];
+         auto f = twiddles[k] * input[i + 5 * octa_stride];
+         auto g = twiddles[k] * input[i + 6 * octa_stride];
+         auto h = twiddles[k] * input[i + 7 * octa_stride];
+
+         auto r0 = a + e; // 0O + 0
+         auto r1 = a - e; // 0O + 1
+         auto r2 = b + f; // 2O + 0
+         auto r3 = b - f; // 2O + 1
+         auto r4 = c + g; // 4O + 0
+         auto r5 = c - g; // 4O + 1
+         auto r6 = d + h; // 60 + 0
+         auto r7 = d - h; // 6O + 1
+
+         r4 *= twiddles[p + k];
+         r5 *= twiddles[p + k + p];
+         r6 *= twiddles[p + k];
+         r7 *= twiddles[p + k + p];
+
+         a = r0 + r4; // 0O + 0
+         b = r1 + r5; // 0O + 1
+         c = r0 - r4; // 00 + 2
+         d = r1 - r5; // O0 + 3
+         e = r2 + r6; // 4O + 0
+         f = r3 + r7; // 4O + 1
+         g = r2 - r6; // 4O + 2
+         h = r3 - r7; // 4O + 3
+
+         // p == 4 twiddles
+         e *= twiddles[3 * p + k];
+         f *= twiddles[3 * p + k + p];
+         g *= twiddles[3 * p + k + 2 * p];
+         h *= twiddles[3 * p + k + 3 * p];
+
+         output[i + j + 0 * out_stride] = a + e;
+         output[i + j + 1 * out_stride] = b + f;
+         output[i + j + 2 * out_stride] = c + g;
+         output[i + j + 3 * out_stride] = d + h;
+         output[i + j + 4 * out_stride] = a - e;
+         output[i + j + 5 * out_stride] = b - f;
+         output[i + j + 6 * out_stride] = c - g;
+         output[i + j + 7 * out_stride] = d - h;
+      }
+   }
+}
 
 static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned samples)
@@ -560,13 +686,13 @@ static void __attribute__((noinline)) fft_forward_radix2_generic(complex<float> 
 
 int main()
 {
-   alignas(64) complex<float> twiddles[N];
-   alignas(64) complex<float> input[N];
-   alignas(64) complex<float> tmp0[N];
-   alignas(64) complex<float> tmp1[N];
+   alignas(64) complex<float> twiddles[Nx * Ny];
+   alignas(64) complex<float> input[Nx * Ny];
+   alignas(64) complex<float> tmp0[Nx * Ny];
+   alignas(64) complex<float> tmp1[Nx * Ny];
 
    auto *pt = twiddles;
-   for (unsigned p = 1; p < N; p <<= 1)
+   for (unsigned p = 1; p < Nx; p <<= 1)
    {
       for (unsigned k = 0; k < p; k++)
          pt[k] = twiddle(-1, k, p);
@@ -576,7 +702,7 @@ int main()
    }
 
    srand(0);
-   for (unsigned i = 0; i < N; i++)
+   for (unsigned i = 0; i < Nx * Ny; i++)
    {
       float real = float(rand()) / RAND_MAX - 0.5f;
       float imag = float(rand()) / RAND_MAX - 0.5f;
@@ -642,23 +768,46 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      pt = twiddles;
+      complex<float> *yout = nullptr;
+      complex<float> *yin = nullptr;
 
-      fft_forward_radix8_p1(tmp0, input, pt, N);
-      pt += 8;
-      auto *out = tmp1;
-      auto *in = tmp0;
-
-      for (unsigned p = 8; p < N; p <<= 3)
+      // Horizontals
+      for (unsigned y = 0; y < Ny; y++)
       {
-         fft_forward_radix8_generic(out, in, pt, p, N);
-         swap(out, in);
+         pt = twiddles;
+
+         fft_forward_radix8_p1(tmp0 + y * Nx, input + y * Nx, pt, Nx);
+         pt += 8;
+         auto *out = tmp1 + y * Nx;
+         auto *in = tmp0 + y * Nx;
+
+         for (unsigned p = 8; p < Nx; p <<= 3)
+         {
+            fft_forward_radix8_generic(out, in, pt, p, Nx);
+            swap(out, in);
+            pt += p * 7;
+         }
+
+         yout = out - y * Nx;
+         yin = in - y * Nx;
+      }
+
+      // Verticals
+      pt = twiddles;
+      fft_forward_radix8_p1_vert(yout, yin, pt, Nx, Ny);
+      pt += 8;
+      swap(yout, yin);
+
+      for (unsigned p = 8; p < Ny; p <<= 3)
+      {
+         fft_forward_radix8_generic_vert(yout, yin, pt, p, Nx, Ny);
          pt += p * 7;
+         swap(yout, yin);
       }
 
 #if DEBUG
-      for (unsigned i = 0; i < N; i++)
-         printf("Radix-8 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
+      for (unsigned i = 0; i < Nx * Ny; i++)
+         printf("Radix-8 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, yin[i].real(), yin[i].imag());
 #endif
    }
 #endif
@@ -666,10 +815,10 @@ int main()
 #if FFTW
    complex<float> *in, *out;
    fftwf_plan p;
-   in = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * N);
-   out = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * N);
+   in = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
+   out = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
 
-   p = fftwf_plan_dft_1d(N, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_MEASURE);
+   p = fftwf_plan_dft_2d(Nx, Ny, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_MEASURE);
    if (!p)
       return 1;
 
@@ -678,7 +827,7 @@ int main()
    {
       fftwf_execute(p);
 #if DEBUG
-      for (unsigned i = 0; i < N; i++)
+      for (unsigned i = 0; i < Nx * Ny; i++)
          printf("FFTW FFT[%03u] = (%+8.3f, %+8.3f)\n", i, out[i].real(), out[i].imag());
 #endif
    }
