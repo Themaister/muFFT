@@ -40,6 +40,7 @@ static inline complex<float> twiddle(int direction, int k, int p)
 
 #if __AVX__
 #define MM __m256
+#define VSIZE 4 // Complex numbers per vector
 #define permute_ps(a, x) _mm256_permute_ps(a, x)
 #define moveldup_ps(x) _mm256_moveldup_ps(x)
 #define movehdup_ps(x) _mm256_movehdup_ps(x)
@@ -53,8 +54,11 @@ static inline complex<float> twiddle(int direction, int k, int p)
 #define splat_const_complex(real, imag) _mm256_set_ps(imag, real, imag, real, imag, real, imag, real)
 #define splat_const_dual_complex(a, b, real, imag) _mm256_set_ps(imag, real, b, a, imag, real, b, a)
 #define splat_complex(addr) ((__m256)_mm256_broadcast_sd((const double*)(addr)))
+#define unpacklo_pd(a, b) ((__m256)_mm256_unpacklo_pd((__m256d)(a), (__m256d)(b)))
+#define unpackhi_pd(a, b) ((__m256)_mm256_unpackhi_pd((__m256d)(a), (__m256d)(b)))
 #elif __SSE3__
 #define MM __m128
+#define VSIZE 2 // Complex numbers per vector
 #define permute_ps(a, x) _mm_shuffle_ps(a, a, x)
 #define moveldup_ps(x) permute_ps(x, _MM_SHUFFLE(2, 2, 0, 0))
 #define movehdup_ps(x) permute_ps(x, _MM_SHUFFLE(3, 3, 1, 1))
@@ -67,6 +71,8 @@ static inline complex<float> twiddle(int direction, int k, int p)
 #define store_ps(addr, x) _mm_store_ps((float*)(addr), x)
 #define splat_const_complex(real, imag) _mm_set_ps(imag, real, imag, real)
 #define splat_const_dual_complex(a, b, real, imag) _mm_set_ps(imag, real, b, a)
+#define unpacklo_pd(a, b) ((__m128)_mm_unpacklo_pd((__m128d)(a), (__m128d)(b)))
+#define unpackhi_pd(a, b) ((__m128)_mm_unpackhi_pd((__m128d)(a), (__m128d)(b)))
 static inline __m128 splat_complex(const void *ptr)
 {
    __m128d reg = _mm_load_sd((const double*)ptr);
@@ -96,7 +102,7 @@ static void __attribute__((noinline)) fft_forward_radix2_p1_vert(complex<float> 
    for (unsigned line = 0; line < half_lines;
          line++, input += samples_x, output += samples_x << 1)
    {
-      for (unsigned i = 0; i < samples_x; i += 4)
+      for (unsigned i = 0; i < samples_x; i += VSIZE)
       {
          MM a = load_ps(&input[i]);
          MM b = load_ps(&input[i + half_stride]);
@@ -145,7 +151,7 @@ static void __attribute__((noinline)) fft_forward_radix2_generic_vert(complex<fl
       unsigned j = ((line << 1) - k) * samples_x;
       const MM w = splat_complex(&twiddles[k]);
 
-      for (unsigned i = 0; i < samples_x; i += 4)
+      for (unsigned i = 0; i < samples_x; i += VSIZE)
       {
          MM a = load_ps(&input[i]);
          MM b = load_ps(&input[i + half_stride]);
@@ -195,7 +201,7 @@ static void __attribute__((noinline)) fft_forward_radix4_p1_vert(complex<float> 
    for (unsigned line = 0; line < quarter_lines;
          line++, input += samples_x, output += samples_x << 2)
    {
-      for (unsigned i = 0; i < samples_x; i += 4)
+      for (unsigned i = 0; i < samples_x; i += VSIZE)
       {
          MM a = load_ps(&input[i]);
          MM b = load_ps(&input[i + quarter_stride]);
@@ -266,7 +272,7 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> 
    for (unsigned line = 0; line < octa_lines;
          line++, input += samples_x, output += samples_x << 3)
    {
-      for (unsigned i = 0; i < samples_x; i += 4)
+      for (unsigned i = 0; i < samples_x; i += VSIZE)
       {
          MM a = load_ps(&input[i]);
          MM b = load_ps(&input[i + octa_stride]);
@@ -391,7 +397,7 @@ static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<fl
       unsigned k = line & (p - 1);
       unsigned j = (((line - k) << 2) + k) * samples_x;
 
-      for (unsigned i = 0; i < samples_x; i += 4)
+      for (unsigned i = 0; i < samples_x; i += VSIZE)
       {
          const MM w = splat_complex(&twiddles[k]);
          MM a = load_ps(&input[i]);
@@ -472,7 +478,7 @@ static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<fl
       unsigned k = line & (p - 1);
       unsigned j = (((line - k) << 3) + k) * samples_x;
 
-      for (unsigned i = 0; i < samples_x; i += 4)
+      for (unsigned i = 0; i < samples_x; i += VSIZE)
       {
          const MM w = splat_complex(&twiddles[k]);
          MM a = load_ps(&input[i]);
@@ -605,7 +611,7 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *outp
    const MM w_h = splat_const_complex(-M_SQRT_2, -M_SQRT_2);
 
    unsigned octa_samples = samples >> 3;
-   for (unsigned i = 0; i < octa_samples; i += 4)
+   for (unsigned i = 0; i < octa_samples; i += VSIZE)
    {
       MM a = load_ps(&input[i]);
       MM b = load_ps(&input[i + octa_samples]);
@@ -649,14 +655,16 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *outp
       MM o6 = sub_ps(c, g); // { 6, 14, ... }
       MM o7 = sub_ps(d, h); // { 7, 15, ... }
 
-      MM o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1); // { 0, 1, 16, 17 }
-      MM o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1); // { 8, 9, 24, 25 }
-      MM o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3); // { 2, 3, 18, 19 }
-      MM o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3); // { 10, 11, 26, 27 }
-      MM o4o5_lo = (__m256)_mm256_unpacklo_pd((__m256d)o4, (__m256d)o5); // { 4, 5, 20, 21 }
-      MM o4o5_hi = (__m256)_mm256_unpackhi_pd((__m256d)o4, (__m256d)o5); // { 12, 13, 28, 29 }
-      MM o6o7_lo = (__m256)_mm256_unpacklo_pd((__m256d)o6, (__m256d)o7); // { 6, 7, 22, 23 }
-      MM o6o7_hi = (__m256)_mm256_unpackhi_pd((__m256d)o6, (__m256d)o7); // { 14, 15, 30, 31 }
+      MM o0o1_lo = unpacklo_pd(o0, o1); // { 0, 1, 16, 17 }
+      MM o0o1_hi = unpackhi_pd(o0, o1); // { 8, 9, 24, 25 }
+      MM o2o3_lo = unpacklo_pd(o2, o3); // { 2, 3, 18, 19 }
+      MM o2o3_hi = unpackhi_pd(o2, o3); // { 10, 11, 26, 27 }
+      MM o4o5_lo = unpacklo_pd(o4, o5); // { 4, 5, 20, 21 }
+      MM o4o5_hi = unpackhi_pd(o4, o5); // { 12, 13, 28, 29 }
+      MM o6o7_lo = unpacklo_pd(o6, o7); // { 6, 7, 22, 23 }
+      MM o6o7_hi = unpackhi_pd(o6, o7); // { 14, 15, 30, 31 }
+
+#if VSIZE == 4
       o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0)); // { 0, 1, 2, 3 }
       o1 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (2 << 4) | (0 << 0)); // { 4, 5, 6, 7 }
       o2 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0)); // { 8, 9, 10, 11 }
@@ -665,16 +673,26 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *outp
       o5 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (3 << 4) | (1 << 0));
       o6 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0));
       o7 = _mm256_permute2f128_ps(o4o5_hi, o6o7_hi, (3 << 4) | (1 << 0));
+#else
+      o0 = o0o1_lo;
+      o1 = o2o3_lo;
+      o2 = o4o5_lo;
+      o3 = o6o7_lo;
+      o4 = o0o1_hi;
+      o5 = o2o3_hi;
+      o6 = o4o5_hi;
+      o7 = o6o7_hi;
+#endif
 
       unsigned j = i << 3;
-      store_ps(&output[j +  0], o0);
-      store_ps(&output[j +  4], o1);
-      store_ps(&output[j +  8], o2);
-      store_ps(&output[j + 12], o3);
-      store_ps(&output[j + 16], o4);
-      store_ps(&output[j + 20], o5);
-      store_ps(&output[j + 24], o6);
-      store_ps(&output[j + 28], o7);
+      store_ps(&output[j + 0 * VSIZE], o0);
+      store_ps(&output[j + 1 * VSIZE], o1);
+      store_ps(&output[j + 2 * VSIZE], o2);
+      store_ps(&output[j + 3 * VSIZE], o3);
+      store_ps(&output[j + 4 * VSIZE], o4);
+      store_ps(&output[j + 5 * VSIZE], o5);
+      store_ps(&output[j + 6 * VSIZE], o6);
+      store_ps(&output[j + 7 * VSIZE], o7);
    }
 #else
    unsigned octa_samples = samples >> 3;
@@ -735,7 +753,7 @@ static void __attribute__((noinline)) fft_forward_radix8_generic(complex<float> 
 {
 #if SIMD
    unsigned octa_samples = samples >> 3;
-   for (unsigned i = 0; i < octa_samples; i += 4)
+   for (unsigned i = 0; i < octa_samples; i += VSIZE)
    {
       unsigned k = i & (p - 1);
       const MM w = load_ps(&twiddles[k]);
@@ -869,7 +887,7 @@ static void __attribute__((noinline)) fft_forward_radix4_p1(complex<float> *outp
    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
    unsigned quarter_samples = samples >> 2;
 
-   for (unsigned i = 0; i < quarter_samples; i += 4)
+   for (unsigned i = 0; i < quarter_samples; i += VSIZE)
    {
       MM a = load_ps(&input[i]);
       MM b = load_ps(&input[i + quarter_samples]);
@@ -888,20 +906,27 @@ static void __attribute__((noinline)) fft_forward_radix4_p1(complex<float> *outp
       MM o3 = sub_ps(r1, r3); // { 3, 7, 11, 15 }
 
       // Transpose
-      MM o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1); // { 0, 1, 8, 9 }
-      MM o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1); // { 4, 5, 12, 13 }
-      MM o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3); // { 2, 3, 10, 11 }
-      MM o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3); // { 6, 7, 14, 15 }
+      MM o0o1_lo = unpacklo_pd(o0, o1); // { 0, 1, 8, 9 }
+      MM o0o1_hi = unpackhi_pd(o0, o1); // { 4, 5, 12, 13 }
+      MM o2o3_lo = unpacklo_pd(o2, o3); // { 2, 3, 10, 11 }
+      MM o2o3_hi = unpackhi_pd(o2, o3); // { 6, 7, 14, 15 }
+#if VSIZE == 4
       o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0));  // { 0, 1, 2, 3 }
       o1 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0));  // { 4, 5, 6, 7 }
       o2 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0));  // { 8, 9, 10, 11 }
       o3 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0));  // { 12, 13, 14, 15 }
+#else
+      o0 = o0o1_lo;
+      o1 = o2o3_lo;
+      o2 = o0o1_hi;
+      o3 = o2o3_hi;
+#endif
 
       unsigned j = i << 2;
-      store_ps(&output[j +  0], o0);
-      store_ps(&output[j +  4], o1);
-      store_ps(&output[j +  8], o2);
-      store_ps(&output[j + 12], o3);
+      store_ps(&output[j + 0 * VSIZE], o0);
+      store_ps(&output[j + 1 * VSIZE], o1);
+      store_ps(&output[j + 2 * VSIZE], o2);
+      store_ps(&output[j + 3 * VSIZE], o3);
    }
 #else
    unsigned quarter_samples = samples >> 2;
@@ -933,7 +958,7 @@ static void __attribute__((noinline)) fft_forward_radix4_generic(complex<float> 
 #if SIMD
    unsigned quarter_samples = samples >> 2;
 
-   for (unsigned i = 0; i < quarter_samples; i += 4)
+   for (unsigned i = 0; i < quarter_samples; i += VSIZE)
    {
       unsigned k = i & (p - 1);
 
@@ -1015,14 +1040,19 @@ static void __attribute__((noinline)) fft_forward_radix2_p1(complex<float> *outp
 
       MM r0 = add_ps(a, b); // { 0, 2, 4, 6 }
       MM r1 = sub_ps(a, b); // { 1, 3, 5, 7 }
-      a = (__m256)_mm256_unpacklo_pd((__m256d)r0, (__m256d)r1); // { 0, 1, 4, 5 }
-      b = (__m256)_mm256_unpackhi_pd((__m256d)r0, (__m256d)r1); // { 2, 3, 6, 7 }
+      a = unpacklo_pd(r0, r1); // { 0, 1, 4, 5 }
+      b = unpackhi_pd(r0, r1); // { 2, 3, 6, 7 }
+#if VSIZE == 4
       r0 = _mm256_permute2f128_ps(a, b, (2 << 4) | (0 << 0)); // { 0, 1, 2, 3 }
       r1 = _mm256_permute2f128_ps(a, b, (3 << 4) | (1 << 0)); // { 4, 5, 6, 7 }
+#else
+      r0 = a;
+      r1 = b;
+#endif
 
       unsigned j = i << 1;
-      store_ps(&output[j + 0], r0);
-      store_ps(&output[j + 4], r1);
+      store_ps(&output[j + 0 * VSIZE], r0);
+      store_ps(&output[j + 1 * VSIZE], r1);
    }
 #else
    unsigned half_samples = samples >> 1;
@@ -1045,7 +1075,7 @@ static void __attribute__((noinline)) fft_forward_radix2_p2(complex<float> *outp
    unsigned half_samples = samples >> 1;
    const MM flip_signs = splat_const_dual_complex(0.0f, 0.0f, 0.0f, -0.0f);
 
-   for (unsigned i = 0; i < half_samples; i += 4)
+   for (unsigned i = 0; i < half_samples; i += VSIZE)
    {
       MM a = load_ps(&input[i]);
       MM b = load_ps(&input[i + half_samples]);
@@ -1053,12 +1083,17 @@ static void __attribute__((noinline)) fft_forward_radix2_p2(complex<float> *outp
 
       MM r0 = add_ps(a, b); // { c0, c1, c4, c5 }
       MM r1 = sub_ps(a, b); // { c2, c3, c6, c7 }
+#if VSIZE == 4
       a = _mm256_permute2f128_ps(r0, r1, (2 << 4) | (0 << 0));
       b = _mm256_permute2f128_ps(r0, r1, (3 << 4) | (1 << 0));
+#else
+      a = r0;
+      b = r1;
+#endif
 
       unsigned j = i << 1;
       store_ps(&output[j + 0], a);
-      store_ps(&output[j + 4], b);
+      store_ps(&output[j + VSIZE], b);
    }
 #else
    unsigned half_samples = samples >> 1;
@@ -1081,7 +1116,7 @@ static void __attribute__((noinline)) fft_forward_radix2_generic(complex<float> 
 #if SIMD
    unsigned half_samples = samples >> 1;
 
-   for (unsigned i = 0; i < half_samples; i += 4)
+   for (unsigned i = 0; i < half_samples; i += VSIZE)
    {
       unsigned k = i & (p - 1);
 
