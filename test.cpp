@@ -2,6 +2,7 @@
 #include <complex>
 #include <cmath>
 #include <string.h>
+#include <stdlib.h>
 
 #include <fftw3.h>
 
@@ -1165,9 +1166,9 @@ static void __attribute__((noinline)) fft_forward_radix2_generic(cfloat *output,
 template<typename T>
 T *allocate(size_t count)
 {
-   void *ptr = nullptr;
+   void *ptr = NULL;
    if (posix_memalign(&ptr, 64, count * sizeof(T)) < 0)
-      return nullptr;
+      return NULL;
    return static_cast<T*>(ptr);
 }
 
@@ -1201,8 +1202,8 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      cfloat *out = nullptr;
-      cfloat *in = nullptr;
+      cfloat *out = NULL;
+      cfloat *in = NULL;
 
       // Horizontals
       for (unsigned y = 0; y < Ny; y++)
@@ -1254,8 +1255,8 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      cfloat *out = nullptr;
-      cfloat *in = nullptr;
+      cfloat *out = NULL;
+      cfloat *in = NULL;
 
       // Horizontals
       for (unsigned y = 0; y < Ny; y++)
@@ -1300,8 +1301,8 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      cfloat *out = nullptr;
-      cfloat *in = nullptr;
+      cfloat *out = NULL;
+      cfloat *in = NULL;
 
       // Horizontals
       for (unsigned y = 0; y < Ny; y++)
