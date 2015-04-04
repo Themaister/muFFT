@@ -14,7 +14,7 @@
 #define RADIX8 1
 #define FFTW 1
 #define DEBUG 1
-#define SIMD 0
+#define SIMD 1
 
 #if SIMD
 #include <immintrin.h>
@@ -47,6 +47,68 @@ static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
 static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
 {
+#if SIMD
+   unsigned octa_stride = samples_x * (samples_x >> 3);
+   unsigned octa_lines = samples_y >> 3;
+   const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
+
+   for (unsigned line = 0; line < octa_lines;
+         line++, input += samples_x, output += samples_x << 3)
+   {
+      for (unsigned i = 0; i < samples_x; i += 4)
+      {
+         auto a = _mm256_load_ps((const float*)&input[i]);
+         auto b = _mm256_load_ps((const float*)&input[i + octa_stride]);
+         auto c = _mm256_load_ps((const float*)&input[i + 2 * octa_stride]);
+         auto d = _mm256_load_ps((const float*)&input[i + 3 * octa_stride]);
+         auto e = _mm256_load_ps((const float*)&input[i + 4 * octa_stride]);
+         auto f = _mm256_load_ps((const float*)&input[i + 5 * octa_stride]);
+         auto g = _mm256_load_ps((const float*)&input[i + 6 * octa_stride]);
+         auto h = _mm256_load_ps((const float*)&input[i + 7 * octa_stride]);
+
+         auto r0 = _mm256_add_ps(a, e);
+         auto r1 = _mm256_sub_ps(a, e);
+         auto r2 = _mm256_add_ps(b, f);
+         auto r3 = _mm256_sub_ps(b, f);
+         auto r4 = _mm256_add_ps(c, g);
+         auto r5 = _mm256_sub_ps(c, g);
+         auto r6 = _mm256_add_ps(d, h);
+         auto r7 = _mm256_sub_ps(d, h);
+         r5 = _mm256_xor_ps(_mm256_permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+         r7 = _mm256_xor_ps(_mm256_permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+
+         a = _mm256_add_ps(r0, r4);
+         b = _mm256_add_ps(r1, r5);
+         c = _mm256_sub_ps(r0, r4);
+         d = _mm256_sub_ps(r1, r5);
+         e = _mm256_add_ps(r2, r6);
+         f = _mm256_add_ps(r3, r7);
+         g = _mm256_sub_ps(r2, r6);
+         h = _mm256_sub_ps(r3, r7);
+         f = _mm256_cmul_ps(f, (__m256)_mm256_broadcast_sd((const double*)&twiddles[5]));
+         g = _mm256_cmul_ps(g, (__m256)_mm256_broadcast_sd((const double*)&twiddles[6]));
+         h = _mm256_cmul_ps(h, (__m256)_mm256_broadcast_sd((const double*)&twiddles[7]));
+
+         r0 = _mm256_add_ps(a, e);
+         r1 = _mm256_add_ps(b, f);
+         r2 = _mm256_add_ps(c, g);
+         r3 = _mm256_add_ps(d, h);
+         r4 = _mm256_sub_ps(a, e);
+         r5 = _mm256_sub_ps(b, f);
+         r6 = _mm256_sub_ps(c, g);
+         r7 = _mm256_sub_ps(d, h);
+
+         _mm256_store_ps((float*)&output[i], r0);
+         _mm256_store_ps((float*)&output[i + 1 * samples_x], r1);
+         _mm256_store_ps((float*)&output[i + 2 * samples_x], r2);
+         _mm256_store_ps((float*)&output[i + 3 * samples_x], r3);
+         _mm256_store_ps((float*)&output[i + 4 * samples_x], r4);
+         _mm256_store_ps((float*)&output[i + 5 * samples_x], r5);
+         _mm256_store_ps((float*)&output[i + 6 * samples_x], r6);
+         _mm256_store_ps((float*)&output[i + 7 * samples_x], r7);
+      }
+   }
+#else
    unsigned octa_stride = samples_x * (samples_x >> 3);
    unsigned octa_lines = samples_y >> 3;
 
@@ -102,6 +164,7 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> 
          output[i + 7 * samples_x] = d - h;
       }
    }
+#endif
 }
 
 static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<float> *output, const complex<float> *input,
@@ -768,8 +831,8 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      complex<float> *yout = nullptr;
-      complex<float> *yin = nullptr;
+      complex<float> *out = nullptr;
+      complex<float> *in = nullptr;
 
       // Horizontals
       for (unsigned y = 0; y < Ny; y++)
@@ -778,36 +841,33 @@ int main()
 
          fft_forward_radix8_p1(tmp0 + y * Nx, input + y * Nx, pt, Nx);
          pt += 8;
-         auto *out = tmp1 + y * Nx;
-         auto *in = tmp0 + y * Nx;
+         out = tmp1;
+         in = tmp0;
 
          for (unsigned p = 8; p < Nx; p <<= 3)
          {
-            fft_forward_radix8_generic(out, in, pt, p, Nx);
+            fft_forward_radix8_generic(out + y * Nx, in + y * Nx, pt, p, Nx);
             swap(out, in);
             pt += p * 7;
          }
-
-         yout = out - y * Nx;
-         yin = in - y * Nx;
       }
 
       // Verticals
       pt = twiddles;
-      fft_forward_radix8_p1_vert(yout, yin, pt, Nx, Ny);
+      fft_forward_radix8_p1_vert(out, in, pt, Nx, Ny);
       pt += 8;
-      swap(yout, yin);
+      swap(out, in);
 
       for (unsigned p = 8; p < Ny; p <<= 3)
       {
-         fft_forward_radix8_generic_vert(yout, yin, pt, p, Nx, Ny);
+         fft_forward_radix8_generic_vert(out, in, pt, p, Nx, Ny);
          pt += p * 7;
-         swap(yout, yin);
+         swap(out, in);
       }
 
 #if DEBUG
       for (unsigned i = 0; i < Nx * Ny; i++)
-         printf("Radix-8 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, yin[i].real(), yin[i].imag());
+         printf("Radix-8 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
 #endif
    }
 #endif
