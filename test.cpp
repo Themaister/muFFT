@@ -8,12 +8,12 @@
 #define Nx (8 * 8)
 #define Ny (8 * 8)
 
-#define ITERATIONS 1000000
+#define ITERATIONS 1
 #define RADIX2 0
-#define RADIX4 0
-#define RADIX8 1
-#define FFTW 0
-#define DEBUG 0
+#define RADIX4 1
+#define RADIX8 0
+#define FFTW 1
+#define DEBUG 1
 #define SIMD 1
 
 #if SIMD
@@ -43,6 +43,77 @@ static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
    return _mm256_addsub_ps(R0, R1);
 }
 #endif
+
+static void __attribute__((noinline)) fft_forward_radix4_p1_vert(complex<float> *output, const complex<float> *input,
+      const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
+{
+#if SIMD
+   unsigned quarter_stride = samples_x * (samples_x >> 2);
+   unsigned quarter_lines = samples_y >> 2;
+   const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
+
+   for (unsigned line = 0; line < quarter_lines;
+         line++, input += samples_x, output += samples_x << 2)
+   {
+      for (unsigned i = 0; i < samples_x; i += 4)
+      {
+         auto a = _mm256_load_ps((const float*)&input[i]);
+         auto b = _mm256_load_ps((const float*)&input[i + quarter_stride]);
+         auto c = _mm256_load_ps((const float*)&input[i + 2 * quarter_stride]);
+         auto d = _mm256_load_ps((const float*)&input[i + 3 * quarter_stride]);
+
+         auto r0 = _mm256_add_ps(a, c);
+         auto r1 = _mm256_sub_ps(a, c);
+         auto r2 = _mm256_add_ps(b, d);
+         auto r3 = _mm256_sub_ps(b, d);
+         r3 = _mm256_xor_ps(_mm256_permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+
+         a = _mm256_add_ps(r0, r2);
+         b = _mm256_add_ps(r1, r3);
+         c = _mm256_sub_ps(r0, r2);
+         d = _mm256_sub_ps(r1, r3);
+
+         _mm256_store_ps((float*)&output[i], a);
+         _mm256_store_ps((float*)&output[i + 1 * samples_x], b);
+         _mm256_store_ps((float*)&output[i + 2 * samples_x], c);
+         _mm256_store_ps((float*)&output[i + 3 * samples_x], d);
+      }
+   }
+#else
+   unsigned quarter_stride = samples_x * (samples_x >> 2);
+   unsigned quarter_lines = samples_y >> 2;
+
+   for (unsigned line = 0; line < quarter_lines;
+         line++, input += samples_x, output += samples_x << 2)
+   {
+      for (unsigned i = 0; i < samples_x; i++)
+      {
+         auto a = input[i];
+         auto b = input[i + quarter_stride];
+         auto c = input[i + 2 * quarter_stride];
+         auto d = input[i + 3 * quarter_stride];
+
+         auto r0 = a + c; // 0O + 0
+         auto r1 = a - c; // 0O + 1
+         auto r2 = b + d; // 2O + 0
+         auto r3 = b - d; // 2O + 1
+
+         // p == 2 twiddles
+         r3 = complex<float>(r3.imag(), -r3.real());
+
+         a = r0 + r2; // 0O + 0
+         b = r1 + r3; // 0O + 1
+         c = r0 - r2; // 00 + 2
+         d = r1 - r3; // O0 + 3
+
+         output[i] = a;
+         output[i + 1 * samples_x] = b;
+         output[i + 2 * samples_x] = c;
+         output[i + 3 * samples_x] = d;
+      }
+   }
+#endif
+}
 
 static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
@@ -166,6 +237,88 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> 
    }
 #endif
 }
+
+static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<float> *output, const complex<float> *input,
+      const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+{
+#if SIMD
+   unsigned quarter_stride = samples_x * (samples_x >> 2);
+   unsigned quarter_lines = samples_y >> 2;
+   unsigned out_stride = p * samples_x;
+
+   for (unsigned line = 0; line < quarter_lines; line++, input += samples_x)
+   {
+      unsigned k = line & (p - 1);
+      unsigned j = (((line - k) << 2) + k) * samples_x;
+
+      for (unsigned i = 0; i < samples_x; i += 4)
+      {
+         const auto w = (__m256)_mm256_broadcast_sd((const double*)&twiddles[k]);
+         auto a = _mm256_load_ps((const float*)&input[i]);
+         auto b = _mm256_load_ps((const float*)&input[i + quarter_stride]);
+         auto c = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 2 * quarter_stride]), w);
+         auto d = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 3 * quarter_stride]), w);
+
+         auto r0 = _mm256_add_ps(a, c);
+         auto r1 = _mm256_sub_ps(a, c);
+         auto r2 = _mm256_add_ps(b, d);
+         auto r3 = _mm256_sub_ps(b, d);
+
+         auto w0 = (__m256)_mm256_broadcast_sd((const double*)&twiddles[p + k]);
+         auto w1 = (__m256)_mm256_broadcast_sd((const double*)&twiddles[p + k + p]);
+         r2 = _mm256_cmul_ps(r2, w0);
+         r3 = _mm256_cmul_ps(r3, w1);
+
+         a = _mm256_add_ps(r0, r2);
+         b = _mm256_add_ps(r1, r3);
+         c = _mm256_sub_ps(r0, r2);
+         d = _mm256_sub_ps(r1, r3);
+
+         _mm256_store_ps((float*)&output[i + j + 0 * out_stride], a);
+         _mm256_store_ps((float*)&output[i + j + 1 * out_stride], b);
+         _mm256_store_ps((float*)&output[i + j + 2 * out_stride], c);
+         _mm256_store_ps((float*)&output[i + j + 3 * out_stride], d);
+      }
+   }
+#else
+   unsigned quarter_stride = samples_x * (samples_x >> 2);
+   unsigned quarter_lines = samples_y >> 2;
+   unsigned out_stride = p * samples_x;
+
+   for (unsigned line = 0; line < octa_lines; line++, input += samples_x)
+   {
+      unsigned k = line & (p - 1);
+      unsigned j = (((line - k) << 2) + k) * samples_x;
+
+      for (unsigned i = 0; i < samples_x; i++)
+      {
+         auto a = input[i];
+         auto b = input[i + quarter_stride];
+         auto c = input[i + 2 * quarter_stride];
+         auto d = input[i + 3 * quarter_stride];
+
+         auto r0 = a + c; // 0O + 0
+         auto r1 = a - c; // 0O + 1
+         auto r2 = b + d; // 2O + 0
+         auto r3 = b - d; // 2O + 1
+
+         r2 *= twiddles[p + k];
+         r3 *= twiddles[p + k + p];
+
+         a = r0 + r2; // 0O + 0
+         b = r1 + r3; // 0O + 1
+         c = r0 - r2; // 00 + 2
+         d = r1 - r3; // O0 + 3
+
+         output[i + j + 0 * out_stride] = a;
+         output[i + j + 1 * out_stride] = b;
+         output[i + j + 2 * out_stride] = c;
+         output[i + j + 3 * out_stride] = d;
+      }
+   }
+#endif
+}
+
 
 static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
@@ -878,22 +1031,42 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      pt = twiddles;
+      complex<float> *out = nullptr;
+      complex<float> *in = nullptr;
 
-      fft_forward_radix4_p1(tmp0, input, N);
-      pt += 4;
-      auto *out = tmp1;
-      auto *in = tmp0;
-
-      for (unsigned p = 4; p < N; p <<= 2)
+      // Horizontals
+      for (unsigned y = 0; y < Ny; y++)
       {
-         fft_forward_radix4_generic(out, in, pt, p, N);
-         swap(out, in);
+         pt = twiddles;
+
+         fft_forward_radix4_p1(tmp0 + y * Nx, input + y * Nx, Nx);
+         pt += 4;
+         out = tmp1;
+         in = tmp0;
+
+         for (unsigned p = 4; p < Nx; p <<= 2)
+         {
+            fft_forward_radix4_generic(out + y * Nx, in + y * Nx, pt, p, Nx);
+            swap(out, in);
+            pt += p * 3;
+         }
+      }
+
+      // Verticals
+      pt = twiddles;
+      fft_forward_radix4_p1_vert(out, in, pt, Nx, Ny);
+      pt += 4;
+      swap(out, in);
+
+      for (unsigned p = 4; p < Ny; p <<= 2)
+      {
+         fft_forward_radix4_generic_vert(out, in, pt, p, Nx, Ny);
          pt += p * 3;
+         swap(out, in);
       }
 
 #if DEBUG
-      for (unsigned i = 0; i < N; i++)
+      for (unsigned i = 0; i < Nx * Ny; i++)
          printf("Radix-4 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
 #endif
    }
