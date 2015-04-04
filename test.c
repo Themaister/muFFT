@@ -7,13 +7,13 @@
 #define Nx (8 * 8)
 #define Ny (8 * 8)
 
-#define ITERATIONS 1
-#define RADIX2 1
-#define RADIX4 1
+#define ITERATIONS 1000000
+#define RADIX2 0
+#define RADIX4 0
 #define RADIX8 1
-#define FFTW 1
-#define DEBUG 1
-#define SIMD 0
+#define FFTW 0
+#define DEBUG 0
+#define SIMD 1
 
 #if SIMD
 #if __AVX__
@@ -1197,8 +1197,8 @@ int main()
    srand(0);
    for (unsigned i = 0; i < Nx * Ny; i++)
    {
-      float real = float(rand()) / RAND_MAX - 0.5f;
-      float imag = float(rand()) / RAND_MAX - 0.5f;
+      float real = (float)rand() / RAND_MAX - 0.5f;
+      float imag = (float)rand() / RAND_MAX - 0.5f;
       input[i] = real + I * imag;
    }
 
