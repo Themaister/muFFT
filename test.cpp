@@ -1,9 +1,7 @@
-
-#include <complex>
-#include <cmath>
+#include <complex.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
-
 #include <fftw3.h>
 
 #define Nx (8 * 8)
@@ -27,17 +25,25 @@
 #endif
 #endif
 
+#ifndef M_PI
+#define M_PI 3.14159265359
+#endif
+
 #ifndef M_SQRT_2
 #define M_SQRT_2 0.707106781186547524401
 #endif
 
-using namespace std;
-typedef complex<float> cfloat;
+#define SWAP(a, b) do { cfloat *tmp = b; b = a; a = tmp; } while(0)
+
+#undef I
+#define I _Complex_I
+
+typedef complex float cfloat;
 
 static inline cfloat twiddle(int direction, int k, int p)
 {
    double phase = (M_PI * direction * k) / p;
-   return cfloat(cos(phase), sin(phase));
+   return cos(phase) + I * sin(phase);
 }
 
 #if SIMD
@@ -261,7 +267,7 @@ static void __attribute__((noinline)) fft_forward_radix4_p1_vert(cfloat *output,
          cfloat r3 = b - d; // 2O + 1
 
          // p == 2 twiddles
-         r3 = cfloat(r3.imag(), -r3.real());
+         r3 *= -I;
 
          a = r0 + r2; // 0O + 0
          b = r1 + r3; // 0O + 1
@@ -369,8 +375,8 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(cfloat *output,
          cfloat r7 = d - h; // 6O + 1
 
          // p == 2 twiddles
-         r5 = cfloat(r5.imag(), -r5.real());
-         r7 = cfloat(r7.imag(), -r7.real());
+         r5 *= -I;
+         r7 *= -I;
 
          a = r0 + r4; // 0O + 0
          b = r1 + r5; // 0O + 1
@@ -733,8 +739,8 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(cfloat *output, cons
       cfloat r7 = d - h; // 6O + 1
 
       // p == 2 twiddles
-      r5 = cfloat(r5.imag(), -r5.real());
-      r7 = cfloat(r7.imag(), -r7.real());
+      r5 *= -I;
+      r7 *= -I;
 
       a = r0 + r4; // 0O + 0
       b = r1 + r5; // 0O + 1
@@ -957,7 +963,7 @@ static void __attribute__((noinline)) fft_forward_radix4_p1(cfloat *output, cons
       cfloat r1 = a - c;
       cfloat r2 = b + d;
       cfloat r3 = b - d;
-      r3 = cfloat(r3.imag(), -r3.real());
+      r3 *= -I;
 
       unsigned j = i << 2;
       output[j + 0] = r0 + r2;
@@ -1163,21 +1169,20 @@ static void __attribute__((noinline)) fft_forward_radix2_generic(cfloat *output,
 #endif
 }
 
-template<typename T>
-T *allocate(size_t count)
+cfloat *allocate(size_t count)
 {
    void *ptr = NULL;
-   if (posix_memalign(&ptr, 64, count * sizeof(T)) < 0)
+   if (posix_memalign(&ptr, 64, count * sizeof(cfloat)) < 0)
       return NULL;
-   return static_cast<T*>(ptr);
+   return (cfloat*)ptr;
 }
 
 int main()
 {
-   cfloat *twiddles = allocate<cfloat>(Nx * Ny);
-   cfloat *input = allocate<cfloat>(Nx * Ny);
-   cfloat *tmp0 = allocate<cfloat>(Nx * Ny);
-   cfloat *tmp1 = allocate<cfloat>(Nx * Ny);
+   cfloat *twiddles = allocate(Nx * Ny);
+   cfloat *input = allocate(Nx * Ny);
+   cfloat *tmp0 = allocate(Nx * Ny);
+   cfloat *tmp1 = allocate(Nx * Ny);
 
    cfloat *pt = twiddles;
    for (unsigned p = 1; p < Nx; p <<= 1)
@@ -1194,7 +1199,7 @@ int main()
    {
       float real = float(rand()) / RAND_MAX - 0.5f;
       float imag = float(rand()) / RAND_MAX - 0.5f;
-      input[i] = cfloat(real, imag);
+      input[i] = real + I * imag;
    }
 
 #if RADIX2
@@ -1220,7 +1225,7 @@ int main()
          for (unsigned p = 4; p < Nx; p <<= 1)
          {
             fft_forward_radix2_generic(out + y * Nx, in + y * Nx, pt, p, Nx);
-            swap(out, in);
+            SWAP(out, in);
             pt += p;
          }
       }
@@ -1230,22 +1235,22 @@ int main()
 
       fft_forward_radix2_p1_vert(out, in, pt, Nx, Ny);
       pt += 1;
-      swap(out, in);
+      SWAP(out, in);
 
       fft_forward_radix2_generic_vert(out, in, pt, 2, Nx, Ny);
       pt += 3;
-      swap(out, in);
+      SWAP(out, in);
 
       for (unsigned p = 4; p < Ny; p <<= 1)
       {
          fft_forward_radix2_generic_vert(out, in, pt, p, Nx, Ny);
          pt += p;
-         swap(out, in);
+         SWAP(out, in);
       }
 
 #if DEBUG
       for (unsigned i = 0; i < Nx * Ny; i++)
-         printf("Radix-2 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
+         printf("Radix-2 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, crealf(in[i]), cimagf(in[i]));
 #endif
    }
 #endif
@@ -1271,7 +1276,7 @@ int main()
          for (unsigned p = 4; p < Nx; p <<= 2)
          {
             fft_forward_radix4_generic(out + y * Nx, in + y * Nx, pt, p, Nx);
-            swap(out, in);
+            SWAP(out, in);
             pt += p * 3;
          }
       }
@@ -1280,18 +1285,18 @@ int main()
       pt = twiddles;
       fft_forward_radix4_p1_vert(out, in, pt, Nx, Ny);
       pt += 4;
-      swap(out, in);
+      SWAP(out, in);
 
       for (unsigned p = 4; p < Ny; p <<= 2)
       {
          fft_forward_radix4_generic_vert(out, in, pt, p, Nx, Ny);
          pt += p * 3;
-         swap(out, in);
+         SWAP(out, in);
       }
 
 #if DEBUG
       for (unsigned i = 0; i < Nx * Ny; i++)
-         printf("Radix-4 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
+         printf("Radix-4 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, crealf(in[i]), cimagf(in[i]));
 #endif
    }
 #endif
@@ -1317,7 +1322,7 @@ int main()
          for (unsigned p = 8; p < Nx; p <<= 3)
          {
             fft_forward_radix8_generic(out + y * Nx, in + y * Nx, pt, p, Nx);
-            swap(out, in);
+            SWAP(out, in);
             pt += p * 7;
          }
       }
@@ -1326,18 +1331,18 @@ int main()
       pt = twiddles;
       fft_forward_radix8_p1_vert(out, in, pt, Nx, Ny);
       pt += 8;
-      swap(out, in);
+      SWAP(out, in);
 
       for (unsigned p = 8; p < Ny; p <<= 3)
       {
          fft_forward_radix8_generic_vert(out, in, pt, p, Nx, Ny);
          pt += p * 7;
-         swap(out, in);
+         SWAP(out, in);
       }
 
 #if DEBUG
       for (unsigned i = 0; i < Nx * Ny; i++)
-         printf("Radix-8 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
+         printf("Radix-8 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, crealf(in[i]), cimagf(in[i]));
 #endif
    }
 #endif
@@ -1358,7 +1363,7 @@ int main()
       fftwf_execute(p);
 #if DEBUG
       for (unsigned i = 0; i < Nx * Ny; i++)
-         printf("FFTW FFT[%03u] = (%+8.3f, %+8.3f)\n", i, out[i].real(), out[i].imag());
+         printf("FFTW FFT[%03u] = (%+8.3f, %+8.3f)\n", i, crealf(out[i]), cimagf(out[i]));
 #endif
    }
    fftwf_destroy_plan(p);
