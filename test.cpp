@@ -5,19 +5,23 @@
 
 #include <fftw3.h>
 
-#define Nx (8 * 8 * 8 * 8)
-#define Ny (8 * 8 * 8 * 8)
+#define Nx (8 * 8)
+#define Ny (8 * 8)
 
-#define ITERATIONS 10
-#define RADIX2 0
-#define RADIX4 0
+#define ITERATIONS 1
+#define RADIX2 1
+#define RADIX4 1
 #define RADIX8 1
-#define FFTW 0
-#define DEBUG 0
+#define FFTW 1
+#define DEBUG 1
 #define SIMD 1
 
 #if SIMD
+#if __AVX__
 #include <immintrin.h>
+#elif __SSE3__
+#include <pmmintrin.h>
+#endif
 #endif
 
 #ifndef M_SQRT_2
@@ -33,15 +37,53 @@ static inline complex<float> twiddle(int direction, int k, int p)
 }
 
 #if SIMD
-static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
+
+#if __AVX__
+#define MM __m256
+#define permute_ps(a, x) _mm256_permute_ps(a, x)
+#define moveldup_ps(x) _mm256_moveldup_ps(x)
+#define movehdup_ps(x) _mm256_movehdup_ps(x)
+#define xor_ps(a, b) _mm256_xor_ps(a, b)
+#define add_ps(a, b) _mm256_add_ps(a, b)
+#define sub_ps(a, b) _mm256_sub_ps(a, b)
+#define mul_ps(a, b) _mm256_mul_ps(a, b)
+#define addsub_ps(a, b) _mm256_addsub_ps(a, b)
+#define load_ps(addr) _mm256_load_ps((const float*)(addr))
+#define store_ps(addr, x) _mm256_store_ps((float*)(addr), x)
+#define splat_const_complex(real, imag) _mm256_set_ps(imag, real, imag, real, imag, real, imag, real)
+#define splat_const_dual_complex(a, b, real, imag) _mm256_set_ps(imag, real, b, a, imag, real, b, a)
+#define splat_complex(addr) ((__m256)_mm256_broadcast_sd((const double*)(addr)))
+#elif __SSE3__
+#define MM __m128
+#define permute_ps(a, x) _mm_shuffle_ps(a, a, x)
+#define moveldup_ps(x) permute_ps(x, _MM_SHUFFLE(2, 2, 0, 0))
+#define movehdup_ps(x) permute_ps(x, _MM_SHUFFLE(3, 3, 1, 1))
+#define xor_ps(a, b) _mm_xor_ps(a, b)
+#define add_ps(a, b) _mm_add_ps(a, b)
+#define sub_ps(a, b) _mm_sub_ps(a, b)
+#define mul_ps(a, b) _mm_mul_ps(a, b)
+#define addsub_ps(a, b) _mm_addsub_ps(a, b)
+#define load_ps(addr) _mm_load_ps((const float*)(addr))
+#define store_ps(addr, x) _mm_store_ps((float*)(addr), x)
+#define splat_const_complex(real, imag) _mm_set_ps(imag, real, imag, real)
+#define splat_const_dual_complex(a, b, real, imag) _mm_set_ps(imag, real, b, a)
+static inline __m128 splat_complex(const void *ptr)
 {
-   auto r3 = _mm256_permute_ps(a, _MM_SHUFFLE(2, 3, 0, 1));
-   auto r1 = _mm256_moveldup_ps(b);
-   auto R0 = _mm256_mul_ps(a, r1);
-   auto r2 = _mm256_movehdup_ps(b);
-   auto R1 = _mm256_mul_ps(r2, r3);
-   return _mm256_addsub_ps(R0, R1);
+   __m128d reg = _mm_load_sd((const double*)ptr);
+   return _mm_unpacklo_pd(reg, reg);
 }
+#endif
+
+static inline MM cmul_ps(MM a, MM b)
+{
+   MM r3 = permute_ps(a, _MM_SHUFFLE(2, 3, 0, 1));
+   MM r1 = moveldup_ps(b);
+   MM R0 = mul_ps(a, r1);
+   MM r2 = movehdup_ps(b);
+   MM R1 = mul_ps(r2, r3);
+   return addsub_ps(R0, R1);
+}
+
 #endif
 
 static void __attribute__((noinline)) fft_forward_radix2_p1_vert(complex<float> *output, const complex<float> *input,
@@ -56,14 +98,14 @@ static void __attribute__((noinline)) fft_forward_radix2_p1_vert(complex<float> 
    {
       for (unsigned i = 0; i < samples_x; i += 4)
       {
-         auto a = _mm256_load_ps((const float*)&input[i]);
-         auto b = _mm256_load_ps((const float*)&input[i + half_stride]);
+         MM a = load_ps(&input[i]);
+         MM b = load_ps(&input[i + half_stride]);
 
-         auto r0 = _mm256_add_ps(a, b);
-         auto r1 = _mm256_sub_ps(a, b);
+         MM r0 = add_ps(a, b);
+         MM r1 = sub_ps(a, b);
 
-         _mm256_store_ps((float*)&output[i], r0);
-         _mm256_store_ps((float*)&output[i + 1 * samples_x], r1);
+         store_ps(&output[i], r0);
+         store_ps(&output[i + 1 * samples_x], r1);
       }
    }
 #else
@@ -101,19 +143,19 @@ static void __attribute__((noinline)) fft_forward_radix2_generic_vert(complex<fl
    {
       unsigned k = line & (p - 1);
       unsigned j = ((line << 1) - k) * samples_x;
-      const auto w = (__m256)_mm256_broadcast_sd((const double*)&twiddles[k]);
+      const MM w = splat_complex(&twiddles[k]);
 
       for (unsigned i = 0; i < samples_x; i += 4)
       {
-         auto a = _mm256_load_ps((const float*)&input[i]);
-         auto b = _mm256_load_ps((const float*)&input[i + half_stride]);
-         b = _mm256_cmul_ps(b, w);
+         MM a = load_ps(&input[i]);
+         MM b = load_ps(&input[i + half_stride]);
+         b = cmul_ps(b, w);
 
-         auto r0 = _mm256_add_ps(a, b);
-         auto r1 = _mm256_sub_ps(a, b);
+         MM r0 = add_ps(a, b);
+         MM r1 = sub_ps(a, b);
 
-         _mm256_store_ps((float*)&output[i + j], r0);
-         _mm256_store_ps((float*)&output[i + j + 1 * out_stride], r1);
+         store_ps(&output[i + j], r0);
+         store_ps(&output[i + j + 1 * out_stride], r1);
       }
    }
 #else
@@ -148,33 +190,33 @@ static void __attribute__((noinline)) fft_forward_radix4_p1_vert(complex<float> 
 #if SIMD
    unsigned quarter_stride = samples_x * (samples_x >> 2);
    unsigned quarter_lines = samples_y >> 2;
-   const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
+   const MM flip_signs = splat_const_complex(0.0f, -0.0f);
 
    for (unsigned line = 0; line < quarter_lines;
          line++, input += samples_x, output += samples_x << 2)
    {
       for (unsigned i = 0; i < samples_x; i += 4)
       {
-         auto a = _mm256_load_ps((const float*)&input[i]);
-         auto b = _mm256_load_ps((const float*)&input[i + quarter_stride]);
-         auto c = _mm256_load_ps((const float*)&input[i + 2 * quarter_stride]);
-         auto d = _mm256_load_ps((const float*)&input[i + 3 * quarter_stride]);
+         MM a = load_ps(&input[i]);
+         MM b = load_ps(&input[i + quarter_stride]);
+         MM c = load_ps(&input[i + 2 * quarter_stride]);
+         MM d = load_ps(&input[i + 3 * quarter_stride]);
 
-         auto r0 = _mm256_add_ps(a, c);
-         auto r1 = _mm256_sub_ps(a, c);
-         auto r2 = _mm256_add_ps(b, d);
-         auto r3 = _mm256_sub_ps(b, d);
-         r3 = _mm256_xor_ps(_mm256_permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+         MM r0 = add_ps(a, c);
+         MM r1 = sub_ps(a, c);
+         MM r2 = add_ps(b, d);
+         MM r3 = sub_ps(b, d);
+         r3 = xor_ps(permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
 
-         a = _mm256_add_ps(r0, r2);
-         b = _mm256_add_ps(r1, r3);
-         c = _mm256_sub_ps(r0, r2);
-         d = _mm256_sub_ps(r1, r3);
+         a = add_ps(r0, r2);
+         b = add_ps(r1, r3);
+         c = sub_ps(r0, r2);
+         d = sub_ps(r1, r3);
 
-         _mm256_store_ps((float*)&output[i], a);
-         _mm256_store_ps((float*)&output[i + 1 * samples_x], b);
-         _mm256_store_ps((float*)&output[i + 2 * samples_x], c);
-         _mm256_store_ps((float*)&output[i + 3 * samples_x], d);
+         store_ps(&output[i], a);
+         store_ps(&output[i + 1 * samples_x], b);
+         store_ps(&output[i + 2 * samples_x], c);
+         store_ps(&output[i + 3 * samples_x], d);
       }
    }
 #else
@@ -219,62 +261,62 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> 
 #if SIMD
    unsigned octa_stride = samples_x * (samples_x >> 3);
    unsigned octa_lines = samples_y >> 3;
-   const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
+   const MM flip_signs = splat_const_complex(0.0f, -0.0f);
 
    for (unsigned line = 0; line < octa_lines;
          line++, input += samples_x, output += samples_x << 3)
    {
       for (unsigned i = 0; i < samples_x; i += 4)
       {
-         auto a = _mm256_load_ps((const float*)&input[i]);
-         auto b = _mm256_load_ps((const float*)&input[i + octa_stride]);
-         auto c = _mm256_load_ps((const float*)&input[i + 2 * octa_stride]);
-         auto d = _mm256_load_ps((const float*)&input[i + 3 * octa_stride]);
-         auto e = _mm256_load_ps((const float*)&input[i + 4 * octa_stride]);
-         auto f = _mm256_load_ps((const float*)&input[i + 5 * octa_stride]);
-         auto g = _mm256_load_ps((const float*)&input[i + 6 * octa_stride]);
-         auto h = _mm256_load_ps((const float*)&input[i + 7 * octa_stride]);
+         MM a = load_ps(&input[i]);
+         MM b = load_ps(&input[i + octa_stride]);
+         MM c = load_ps(&input[i + 2 * octa_stride]);
+         MM d = load_ps(&input[i + 3 * octa_stride]);
+         MM e = load_ps(&input[i + 4 * octa_stride]);
+         MM f = load_ps(&input[i + 5 * octa_stride]);
+         MM g = load_ps(&input[i + 6 * octa_stride]);
+         MM h = load_ps(&input[i + 7 * octa_stride]);
 
-         auto r0 = _mm256_add_ps(a, e);
-         auto r1 = _mm256_sub_ps(a, e);
-         auto r2 = _mm256_add_ps(b, f);
-         auto r3 = _mm256_sub_ps(b, f);
-         auto r4 = _mm256_add_ps(c, g);
-         auto r5 = _mm256_sub_ps(c, g);
-         auto r6 = _mm256_add_ps(d, h);
-         auto r7 = _mm256_sub_ps(d, h);
-         r5 = _mm256_xor_ps(_mm256_permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
-         r7 = _mm256_xor_ps(_mm256_permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+         MM r0 = add_ps(a, e);
+         MM r1 = sub_ps(a, e);
+         MM r2 = add_ps(b, f);
+         MM r3 = sub_ps(b, f);
+         MM r4 = add_ps(c, g);
+         MM r5 = sub_ps(c, g);
+         MM r6 = add_ps(d, h);
+         MM r7 = sub_ps(d, h);
+         r5 = xor_ps(permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+         r7 = xor_ps(permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
 
-         a = _mm256_add_ps(r0, r4);
-         b = _mm256_add_ps(r1, r5);
-         c = _mm256_sub_ps(r0, r4);
-         d = _mm256_sub_ps(r1, r5);
-         e = _mm256_add_ps(r2, r6);
-         f = _mm256_add_ps(r3, r7);
-         g = _mm256_sub_ps(r2, r6);
-         h = _mm256_sub_ps(r3, r7);
-         f = _mm256_cmul_ps(f, (__m256)_mm256_broadcast_sd((const double*)&twiddles[5]));
-         g = _mm256_cmul_ps(g, (__m256)_mm256_broadcast_sd((const double*)&twiddles[6]));
-         h = _mm256_cmul_ps(h, (__m256)_mm256_broadcast_sd((const double*)&twiddles[7]));
+         a = add_ps(r0, r4);
+         b = add_ps(r1, r5);
+         c = sub_ps(r0, r4);
+         d = sub_ps(r1, r5);
+         e = add_ps(r2, r6);
+         f = add_ps(r3, r7);
+         g = sub_ps(r2, r6);
+         h = sub_ps(r3, r7);
+         f = cmul_ps(f, splat_complex(&twiddles[5]));
+         g = cmul_ps(g, splat_complex(&twiddles[6]));
+         h = cmul_ps(h, splat_complex(&twiddles[7]));
 
-         r0 = _mm256_add_ps(a, e);
-         r1 = _mm256_add_ps(b, f);
-         r2 = _mm256_add_ps(c, g);
-         r3 = _mm256_add_ps(d, h);
-         r4 = _mm256_sub_ps(a, e);
-         r5 = _mm256_sub_ps(b, f);
-         r6 = _mm256_sub_ps(c, g);
-         r7 = _mm256_sub_ps(d, h);
+         r0 = add_ps(a, e);
+         r1 = add_ps(b, f);
+         r2 = add_ps(c, g);
+         r3 = add_ps(d, h);
+         r4 = sub_ps(a, e);
+         r5 = sub_ps(b, f);
+         r6 = sub_ps(c, g);
+         r7 = sub_ps(d, h);
 
-         _mm256_store_ps((float*)&output[i], r0);
-         _mm256_store_ps((float*)&output[i + 1 * samples_x], r1);
-         _mm256_store_ps((float*)&output[i + 2 * samples_x], r2);
-         _mm256_store_ps((float*)&output[i + 3 * samples_x], r3);
-         _mm256_store_ps((float*)&output[i + 4 * samples_x], r4);
-         _mm256_store_ps((float*)&output[i + 5 * samples_x], r5);
-         _mm256_store_ps((float*)&output[i + 6 * samples_x], r6);
-         _mm256_store_ps((float*)&output[i + 7 * samples_x], r7);
+         store_ps(&output[i], r0);
+         store_ps(&output[i + 1 * samples_x], r1);
+         store_ps(&output[i + 2 * samples_x], r2);
+         store_ps(&output[i + 3 * samples_x], r3);
+         store_ps(&output[i + 4 * samples_x], r4);
+         store_ps(&output[i + 5 * samples_x], r5);
+         store_ps(&output[i + 6 * samples_x], r6);
+         store_ps(&output[i + 7 * samples_x], r7);
       }
    }
 #else
@@ -351,31 +393,31 @@ static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<fl
 
       for (unsigned i = 0; i < samples_x; i += 4)
       {
-         const auto w = (__m256)_mm256_broadcast_sd((const double*)&twiddles[k]);
-         auto a = _mm256_load_ps((const float*)&input[i]);
-         auto b = _mm256_load_ps((const float*)&input[i + quarter_stride]);
-         auto c = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 2 * quarter_stride]), w);
-         auto d = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 3 * quarter_stride]), w);
+         const MM w = splat_complex(&twiddles[k]);
+         MM a = load_ps(&input[i]);
+         MM b = load_ps(&input[i + quarter_stride]);
+         MM c = cmul_ps(load_ps(&input[i + 2 * quarter_stride]), w);
+         MM d = cmul_ps(load_ps(&input[i + 3 * quarter_stride]), w);
 
-         auto r0 = _mm256_add_ps(a, c);
-         auto r1 = _mm256_sub_ps(a, c);
-         auto r2 = _mm256_add_ps(b, d);
-         auto r3 = _mm256_sub_ps(b, d);
+         MM r0 = add_ps(a, c);
+         MM r1 = sub_ps(a, c);
+         MM r2 = add_ps(b, d);
+         MM r3 = sub_ps(b, d);
 
-         auto w0 = (__m256)_mm256_broadcast_sd((const double*)&twiddles[p + k]);
-         auto w1 = (__m256)_mm256_broadcast_sd((const double*)&twiddles[p + k + p]);
-         r2 = _mm256_cmul_ps(r2, w0);
-         r3 = _mm256_cmul_ps(r3, w1);
+         MM w0 = splat_complex(&twiddles[p + k]);
+         MM w1 = splat_complex(&twiddles[p + k + p]);
+         r2 = cmul_ps(r2, w0);
+         r3 = cmul_ps(r3, w1);
 
-         a = _mm256_add_ps(r0, r2);
-         b = _mm256_add_ps(r1, r3);
-         c = _mm256_sub_ps(r0, r2);
-         d = _mm256_sub_ps(r1, r3);
+         a = add_ps(r0, r2);
+         b = add_ps(r1, r3);
+         c = sub_ps(r0, r2);
+         d = sub_ps(r1, r3);
 
-         _mm256_store_ps((float*)&output[i + j + 0 * out_stride], a);
-         _mm256_store_ps((float*)&output[i + j + 1 * out_stride], b);
-         _mm256_store_ps((float*)&output[i + j + 2 * out_stride], c);
-         _mm256_store_ps((float*)&output[i + j + 3 * out_stride], d);
+         store_ps(&output[i + j + 0 * out_stride], a);
+         store_ps(&output[i + j + 1 * out_stride], b);
+         store_ps(&output[i + j + 2 * out_stride], c);
+         store_ps(&output[i + j + 3 * out_stride], d);
       }
    }
 #else
@@ -432,63 +474,63 @@ static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<fl
 
       for (unsigned i = 0; i < samples_x; i += 4)
       {
-         const auto w = (__m256)_mm256_broadcast_sd((const double*)&twiddles[k]);
-         auto a = _mm256_load_ps((const float*)&input[i]);
-         auto b = _mm256_load_ps((const float*)&input[i + octa_stride]);
-         auto c = _mm256_load_ps((const float*)&input[i + 2 * octa_stride]);
-         auto d = _mm256_load_ps((const float*)&input[i + 3 * octa_stride]);
-         auto e = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 4 * octa_stride]), w);
-         auto f = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 5 * octa_stride]), w);
-         auto g = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 6 * octa_stride]), w);
-         auto h = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 7 * octa_stride]), w);
+         const MM w = splat_complex(&twiddles[k]);
+         MM a = load_ps(&input[i]);
+         MM b = load_ps(&input[i + octa_stride]);
+         MM c = load_ps(&input[i + 2 * octa_stride]);
+         MM d = load_ps(&input[i + 3 * octa_stride]);
+         MM e = cmul_ps(load_ps(&input[i + 4 * octa_stride]), w);
+         MM f = cmul_ps(load_ps(&input[i + 5 * octa_stride]), w);
+         MM g = cmul_ps(load_ps(&input[i + 6 * octa_stride]), w);
+         MM h = cmul_ps(load_ps(&input[i + 7 * octa_stride]), w);
 
-         auto r0 = _mm256_add_ps(a, e);
-         auto r1 = _mm256_sub_ps(a, e);
-         auto r2 = _mm256_add_ps(b, f);
-         auto r3 = _mm256_sub_ps(b, f);
-         auto r4 = _mm256_add_ps(c, g);
-         auto r5 = _mm256_sub_ps(c, g);
-         auto r6 = _mm256_add_ps(d, h);
-         auto r7 = _mm256_sub_ps(d, h);
+         MM r0 = add_ps(a, e);
+         MM r1 = sub_ps(a, e);
+         MM r2 = add_ps(b, f);
+         MM r3 = sub_ps(b, f);
+         MM r4 = add_ps(c, g);
+         MM r5 = sub_ps(c, g);
+         MM r6 = add_ps(d, h);
+         MM r7 = sub_ps(d, h);
 
-         auto w0 = (__m256)_mm256_broadcast_sd((const double*)&twiddles[p + k]);
-         auto w1 = (__m256)_mm256_broadcast_sd((const double*)&twiddles[p + k + p]);
-         r4 = _mm256_cmul_ps(r4, w0);
-         r5 = _mm256_cmul_ps(r5, w1);
-         r6 = _mm256_cmul_ps(r6, w0);
-         r7 = _mm256_cmul_ps(r7, w1);
+         MM w0 = splat_complex(&twiddles[p + k]);
+         MM w1 = splat_complex(&twiddles[p + k + p]);
+         r4 = cmul_ps(r4, w0);
+         r5 = cmul_ps(r5, w1);
+         r6 = cmul_ps(r6, w0);
+         r7 = cmul_ps(r7, w1);
 
-         a = _mm256_add_ps(r0, r4);
-         b = _mm256_add_ps(r1, r5);
-         c = _mm256_sub_ps(r0, r4);
-         d = _mm256_sub_ps(r1, r5);
-         e = _mm256_add_ps(r2, r6);
-         f = _mm256_add_ps(r3, r7);
-         g = _mm256_sub_ps(r2, r6);
-         h = _mm256_sub_ps(r3, r7);
+         a = add_ps(r0, r4);
+         b = add_ps(r1, r5);
+         c = sub_ps(r0, r4);
+         d = sub_ps(r1, r5);
+         e = add_ps(r2, r6);
+         f = add_ps(r3, r7);
+         g = sub_ps(r2, r6);
+         h = sub_ps(r3, r7);
 
-         e = _mm256_cmul_ps(e, (__m256)_mm256_broadcast_sd((const double*)&twiddles[3 * p + k]));
-         f = _mm256_cmul_ps(f, (__m256)_mm256_broadcast_sd((const double*)&twiddles[3 * p + k + p]));
-         g = _mm256_cmul_ps(g, (__m256)_mm256_broadcast_sd((const double*)&twiddles[3 * p + k + 2 * p]));
-         h = _mm256_cmul_ps(h, (__m256)_mm256_broadcast_sd((const double*)&twiddles[3 * p + k + 3 * p]));
+         e = cmul_ps(e, splat_complex(&twiddles[3 * p + k]));
+         f = cmul_ps(f, splat_complex(&twiddles[3 * p + k + p]));
+         g = cmul_ps(g, splat_complex(&twiddles[3 * p + k + 2 * p]));
+         h = cmul_ps(h, splat_complex(&twiddles[3 * p + k + 3 * p]));
 
-         r0 = _mm256_add_ps(a, e);
-         r1 = _mm256_add_ps(b, f);
-         r2 = _mm256_add_ps(c, g);
-         r3 = _mm256_add_ps(d, h);
-         r4 = _mm256_sub_ps(a, e);
-         r5 = _mm256_sub_ps(b, f);
-         r6 = _mm256_sub_ps(c, g);
-         r7 = _mm256_sub_ps(d, h);
+         r0 = add_ps(a, e);
+         r1 = add_ps(b, f);
+         r2 = add_ps(c, g);
+         r3 = add_ps(d, h);
+         r4 = sub_ps(a, e);
+         r5 = sub_ps(b, f);
+         r6 = sub_ps(c, g);
+         r7 = sub_ps(d, h);
 
-         _mm256_store_ps((float*)&output[i + j + 0 * out_stride], r0);
-         _mm256_store_ps((float*)&output[i + j + 1 * out_stride], r1);
-         _mm256_store_ps((float*)&output[i + j + 2 * out_stride], r2);
-         _mm256_store_ps((float*)&output[i + j + 3 * out_stride], r3);
-         _mm256_store_ps((float*)&output[i + j + 4 * out_stride], r4);
-         _mm256_store_ps((float*)&output[i + j + 5 * out_stride], r5);
-         _mm256_store_ps((float*)&output[i + j + 6 * out_stride], r6);
-         _mm256_store_ps((float*)&output[i + j + 7 * out_stride], r7);
+         store_ps(&output[i + j + 0 * out_stride], r0);
+         store_ps(&output[i + j + 1 * out_stride], r1);
+         store_ps(&output[i + j + 2 * out_stride], r2);
+         store_ps(&output[i + j + 3 * out_stride], r3);
+         store_ps(&output[i + j + 4 * out_stride], r4);
+         store_ps(&output[i + j + 5 * out_stride], r5);
+         store_ps(&output[i + j + 6 * out_stride], r6);
+         store_ps(&output[i + j + 7 * out_stride], r7);
       }
    }
 #else
@@ -558,63 +600,63 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *outp
       const complex<float> *twiddles, unsigned samples)
 {
 #if SIMD
-   const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
-   const auto w_f = _mm256_set_ps(-M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2);
-   const auto w_h = _mm256_set_ps(-M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2);
+   const MM flip_signs = splat_const_complex(0.0f, -0.0f);
+   const MM w_f = splat_const_complex(+M_SQRT_2, -M_SQRT_2);
+   const MM w_h = splat_const_complex(-M_SQRT_2, -M_SQRT_2);
 
    unsigned octa_samples = samples >> 3;
    for (unsigned i = 0; i < octa_samples; i += 4)
    {
-      auto a = _mm256_load_ps((const float*)&input[i]);
-      auto b = _mm256_load_ps((const float*)&input[i + octa_samples]);
-      auto c = _mm256_load_ps((const float*)&input[i + 2 * octa_samples]);
-      auto d = _mm256_load_ps((const float*)&input[i + 3 * octa_samples]);
-      auto e = _mm256_load_ps((const float*)&input[i + 4 * octa_samples]);
-      auto f = _mm256_load_ps((const float*)&input[i + 5 * octa_samples]);
-      auto g = _mm256_load_ps((const float*)&input[i + 6 * octa_samples]);
-      auto h = _mm256_load_ps((const float*)&input[i + 7 * octa_samples]);
+      MM a = load_ps(&input[i]);
+      MM b = load_ps(&input[i + octa_samples]);
+      MM c = load_ps(&input[i + 2 * octa_samples]);
+      MM d = load_ps(&input[i + 3 * octa_samples]);
+      MM e = load_ps(&input[i + 4 * octa_samples]);
+      MM f = load_ps(&input[i + 5 * octa_samples]);
+      MM g = load_ps(&input[i + 6 * octa_samples]);
+      MM h = load_ps(&input[i + 7 * octa_samples]);
 
-      auto r0 = _mm256_add_ps(a, e); // 0O + 0
-      auto r1 = _mm256_sub_ps(a, e); // 0O + 1
-      auto r2 = _mm256_add_ps(b, f); // 0O + 0
-      auto r3 = _mm256_sub_ps(b, f); // 0O + 1
-      auto r4 = _mm256_add_ps(c, g); // 0O + 0
-      auto r5 = _mm256_sub_ps(c, g); // 0O + 1
-      auto r6 = _mm256_add_ps(d, h); // 0O + 0
-      auto r7 = _mm256_sub_ps(d, h); // 0O + 1
-      r5 = _mm256_xor_ps(_mm256_permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
-      r7 = _mm256_xor_ps(_mm256_permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+      MM r0 = add_ps(a, e); // 0O + 0
+      MM r1 = sub_ps(a, e); // 0O + 1
+      MM r2 = add_ps(b, f); // 0O + 0
+      MM r3 = sub_ps(b, f); // 0O + 1
+      MM r4 = add_ps(c, g); // 0O + 0
+      MM r5 = sub_ps(c, g); // 0O + 1
+      MM r6 = add_ps(d, h); // 0O + 0
+      MM r7 = sub_ps(d, h); // 0O + 1
+      r5 = xor_ps(permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+      r7 = xor_ps(permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
 
-      a = _mm256_add_ps(r0, r4);
-      b = _mm256_add_ps(r1, r5);
-      c = _mm256_sub_ps(r0, r4);
-      d = _mm256_sub_ps(r1, r5);
-      e = _mm256_add_ps(r2, r6);
-      f = _mm256_add_ps(r3, r7);
-      g = _mm256_sub_ps(r2, r6);
-      h = _mm256_sub_ps(r3, r7);
+      a = add_ps(r0, r4);
+      b = add_ps(r1, r5);
+      c = sub_ps(r0, r4);
+      d = sub_ps(r1, r5);
+      e = add_ps(r2, r6);
+      f = add_ps(r3, r7);
+      g = sub_ps(r2, r6);
+      h = sub_ps(r3, r7);
 
-      f = _mm256_cmul_ps(f, w_f);
-      g = _mm256_xor_ps(_mm256_permute_ps(g, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); // -j
-      h = _mm256_cmul_ps(h, w_h);
+      f = cmul_ps(f, w_f);
+      g = xor_ps(permute_ps(g, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); // -j
+      h = cmul_ps(h, w_h);
 
-      auto o0 = _mm256_add_ps(a, e); // { 0, 8, ... }
-      auto o1 = _mm256_add_ps(b, f); // { 1, 9, ... }
-      auto o2 = _mm256_add_ps(c, g); // { 2, 10, ... }
-      auto o3 = _mm256_add_ps(d, h); // { 3, 11, ... }
-      auto o4 = _mm256_sub_ps(a, e); // { 4, 12, ... }
-      auto o5 = _mm256_sub_ps(b, f); // { 5, 13, ... }
-      auto o6 = _mm256_sub_ps(c, g); // { 6, 14, ... }
-      auto o7 = _mm256_sub_ps(d, h); // { 7, 15, ... }
+      MM o0 = add_ps(a, e); // { 0, 8, ... }
+      MM o1 = add_ps(b, f); // { 1, 9, ... }
+      MM o2 = add_ps(c, g); // { 2, 10, ... }
+      MM o3 = add_ps(d, h); // { 3, 11, ... }
+      MM o4 = sub_ps(a, e); // { 4, 12, ... }
+      MM o5 = sub_ps(b, f); // { 5, 13, ... }
+      MM o6 = sub_ps(c, g); // { 6, 14, ... }
+      MM o7 = sub_ps(d, h); // { 7, 15, ... }
 
-      auto o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1); // { 0, 1, 16, 17 }
-      auto o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1); // { 8, 9, 24, 25 }
-      auto o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3); // { 2, 3, 18, 19 }
-      auto o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3); // { 10, 11, 26, 27 }
-      auto o4o5_lo = (__m256)_mm256_unpacklo_pd((__m256d)o4, (__m256d)o5); // { 4, 5, 20, 21 }
-      auto o4o5_hi = (__m256)_mm256_unpackhi_pd((__m256d)o4, (__m256d)o5); // { 12, 13, 28, 29 }
-      auto o6o7_lo = (__m256)_mm256_unpacklo_pd((__m256d)o6, (__m256d)o7); // { 6, 7, 22, 23 }
-      auto o6o7_hi = (__m256)_mm256_unpackhi_pd((__m256d)o6, (__m256d)o7); // { 14, 15, 30, 31 }
+      MM o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1); // { 0, 1, 16, 17 }
+      MM o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1); // { 8, 9, 24, 25 }
+      MM o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3); // { 2, 3, 18, 19 }
+      MM o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3); // { 10, 11, 26, 27 }
+      MM o4o5_lo = (__m256)_mm256_unpacklo_pd((__m256d)o4, (__m256d)o5); // { 4, 5, 20, 21 }
+      MM o4o5_hi = (__m256)_mm256_unpackhi_pd((__m256d)o4, (__m256d)o5); // { 12, 13, 28, 29 }
+      MM o6o7_lo = (__m256)_mm256_unpacklo_pd((__m256d)o6, (__m256d)o7); // { 6, 7, 22, 23 }
+      MM o6o7_hi = (__m256)_mm256_unpackhi_pd((__m256d)o6, (__m256d)o7); // { 14, 15, 30, 31 }
       o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0)); // { 0, 1, 2, 3 }
       o1 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (2 << 4) | (0 << 0)); // { 4, 5, 6, 7 }
       o2 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0)); // { 8, 9, 10, 11 }
@@ -625,14 +667,14 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *outp
       o7 = _mm256_permute2f128_ps(o4o5_hi, o6o7_hi, (3 << 4) | (1 << 0));
 
       unsigned j = i << 3;
-      _mm256_store_ps((float*)&output[j +  0], o0);
-      _mm256_store_ps((float*)&output[j +  4], o1);
-      _mm256_store_ps((float*)&output[j +  8], o2);
-      _mm256_store_ps((float*)&output[j + 12], o3);
-      _mm256_store_ps((float*)&output[j + 16], o4);
-      _mm256_store_ps((float*)&output[j + 20], o5);
-      _mm256_store_ps((float*)&output[j + 24], o6);
-      _mm256_store_ps((float*)&output[j + 28], o7);
+      store_ps(&output[j +  0], o0);
+      store_ps(&output[j +  4], o1);
+      store_ps(&output[j +  8], o2);
+      store_ps(&output[j + 12], o3);
+      store_ps(&output[j + 16], o4);
+      store_ps(&output[j + 20], o5);
+      store_ps(&output[j + 24], o6);
+      store_ps(&output[j + 28], o7);
    }
 #else
    unsigned octa_samples = samples >> 3;
@@ -696,73 +738,73 @@ static void __attribute__((noinline)) fft_forward_radix8_generic(complex<float> 
    for (unsigned i = 0; i < octa_samples; i += 4)
    {
       unsigned k = i & (p - 1);
-      const auto w = _mm256_load_ps((const float*)&twiddles[k]);
-      auto a = _mm256_load_ps((const float*)&input[i]);
-      auto b = _mm256_load_ps((const float*)&input[i + octa_samples]);
-      auto c = _mm256_load_ps((const float*)&input[i + 2 * octa_samples]);
-      auto d = _mm256_load_ps((const float*)&input[i + 3 * octa_samples]);
-      auto e = _mm256_load_ps((const float*)&input[i + 4 * octa_samples]);
-      auto f = _mm256_load_ps((const float*)&input[i + 5 * octa_samples]);
-      auto g = _mm256_load_ps((const float*)&input[i + 6 * octa_samples]);
-      auto h = _mm256_load_ps((const float*)&input[i + 7 * octa_samples]);
+      const MM w = load_ps(&twiddles[k]);
+      MM a = load_ps(&input[i]);
+      MM b = load_ps(&input[i + octa_samples]);
+      MM c = load_ps(&input[i + 2 * octa_samples]);
+      MM d = load_ps(&input[i + 3 * octa_samples]);
+      MM e = load_ps(&input[i + 4 * octa_samples]);
+      MM f = load_ps(&input[i + 5 * octa_samples]);
+      MM g = load_ps(&input[i + 6 * octa_samples]);
+      MM h = load_ps(&input[i + 7 * octa_samples]);
 
-      e = _mm256_cmul_ps(e, w);
-      f = _mm256_cmul_ps(f, w);
-      g = _mm256_cmul_ps(g, w);
-      h = _mm256_cmul_ps(h, w);
+      e = cmul_ps(e, w);
+      f = cmul_ps(f, w);
+      g = cmul_ps(g, w);
+      h = cmul_ps(h, w);
 
-      auto r0 = _mm256_add_ps(a, e); // 0O + 0
-      auto r1 = _mm256_sub_ps(a, e); // 0O + 1
-      auto r2 = _mm256_add_ps(b, f); // 0O + 0
-      auto r3 = _mm256_sub_ps(b, f); // 0O + 1
-      auto r4 = _mm256_add_ps(c, g); // 0O + 0
-      auto r5 = _mm256_sub_ps(c, g); // 0O + 1
-      auto r6 = _mm256_add_ps(d, h); // 0O + 0
-      auto r7 = _mm256_sub_ps(d, h); // 0O + 1
+      MM r0 = add_ps(a, e); // 0O + 0
+      MM r1 = sub_ps(a, e); // 0O + 1
+      MM r2 = add_ps(b, f); // 0O + 0
+      MM r3 = sub_ps(b, f); // 0O + 1
+      MM r4 = add_ps(c, g); // 0O + 0
+      MM r5 = sub_ps(c, g); // 0O + 1
+      MM r6 = add_ps(d, h); // 0O + 0
+      MM r7 = sub_ps(d, h); // 0O + 1
 
-      const auto w0 = _mm256_load_ps((const float*)&twiddles[p + k]);
-      const auto w1 = _mm256_load_ps((const float*)&twiddles[2 * p + k]);
-      r4 = _mm256_cmul_ps(r4, w0);
-      r5 = _mm256_cmul_ps(r5, w1);
-      r6 = _mm256_cmul_ps(r6, w0);
-      r7 = _mm256_cmul_ps(r7, w1);
+      const MM w0 = load_ps(&twiddles[p + k]);
+      const MM w1 = load_ps(&twiddles[2 * p + k]);
+      r4 = cmul_ps(r4, w0);
+      r5 = cmul_ps(r5, w1);
+      r6 = cmul_ps(r6, w0);
+      r7 = cmul_ps(r7, w1);
 
-      a = _mm256_add_ps(r0, r4);
-      b = _mm256_add_ps(r1, r5);
-      c = _mm256_sub_ps(r0, r4);
-      d = _mm256_sub_ps(r1, r5);
-      e = _mm256_add_ps(r2, r6);
-      f = _mm256_add_ps(r3, r7);
-      g = _mm256_sub_ps(r2, r6);
-      h = _mm256_sub_ps(r3, r7);
+      a = add_ps(r0, r4);
+      b = add_ps(r1, r5);
+      c = sub_ps(r0, r4);
+      d = sub_ps(r1, r5);
+      e = add_ps(r2, r6);
+      f = add_ps(r3, r7);
+      g = sub_ps(r2, r6);
+      h = sub_ps(r3, r7);
 
-      const auto we = _mm256_load_ps((const float*)&twiddles[3 * p + k]);
-      const auto wf = _mm256_load_ps((const float*)&twiddles[3 * p + k + p]);
-      const auto wg = _mm256_load_ps((const float*)&twiddles[3 * p + k + 2 * p]);
-      const auto wh = _mm256_load_ps((const float*)&twiddles[3 * p + k + 3 * p]);
-      e = _mm256_cmul_ps(e, we);
-      f = _mm256_cmul_ps(f, wf);
-      g = _mm256_cmul_ps(g, wg);
-      h = _mm256_cmul_ps(h, wh);
+      const MM we = load_ps(&twiddles[3 * p + k]);
+      const MM wf = load_ps(&twiddles[3 * p + k + p]);
+      const MM wg = load_ps(&twiddles[3 * p + k + 2 * p]);
+      const MM wh = load_ps(&twiddles[3 * p + k + 3 * p]);
+      e = cmul_ps(e, we);
+      f = cmul_ps(f, wf);
+      g = cmul_ps(g, wg);
+      h = cmul_ps(h, wh);
 
-      auto o0 = _mm256_add_ps(a, e);
-      auto o1 = _mm256_add_ps(b, f);
-      auto o2 = _mm256_add_ps(c, g);
-      auto o3 = _mm256_add_ps(d, h);
-      auto o4 = _mm256_sub_ps(a, e);
-      auto o5 = _mm256_sub_ps(b, f);
-      auto o6 = _mm256_sub_ps(c, g);
-      auto o7 = _mm256_sub_ps(d, h);
+      MM o0 = add_ps(a, e);
+      MM o1 = add_ps(b, f);
+      MM o2 = add_ps(c, g);
+      MM o3 = add_ps(d, h);
+      MM o4 = sub_ps(a, e);
+      MM o5 = sub_ps(b, f);
+      MM o6 = sub_ps(c, g);
+      MM o7 = sub_ps(d, h);
 
       unsigned j = ((i - k) << 3) + k;
-      _mm256_store_ps((float*)&output[j + 0 * p], o0);
-      _mm256_store_ps((float*)&output[j + 1 * p], o1);
-      _mm256_store_ps((float*)&output[j + 2 * p], o2);
-      _mm256_store_ps((float*)&output[j + 3 * p], o3);
-      _mm256_store_ps((float*)&output[j + 4 * p], o4);
-      _mm256_store_ps((float*)&output[j + 5 * p], o5);
-      _mm256_store_ps((float*)&output[j + 6 * p], o6);
-      _mm256_store_ps((float*)&output[j + 7 * p], o7);
+      store_ps(&output[j + 0 * p], o0);
+      store_ps(&output[j + 1 * p], o1);
+      store_ps(&output[j + 2 * p], o2);
+      store_ps(&output[j + 3 * p], o3);
+      store_ps(&output[j + 4 * p], o4);
+      store_ps(&output[j + 5 * p], o5);
+      store_ps(&output[j + 6 * p], o6);
+      store_ps(&output[j + 7 * p], o7);
    }
 #else
    unsigned octa_samples = samples >> 3;
@@ -824,42 +866,42 @@ static void __attribute__((noinline)) fft_forward_radix4_p1(complex<float> *outp
       unsigned samples)
 {
 #if SIMD
-   const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
+   const MM flip_signs = splat_const_complex(0.0f, -0.0f);
    unsigned quarter_samples = samples >> 2;
 
    for (unsigned i = 0; i < quarter_samples; i += 4)
    {
-      auto a = _mm256_load_ps((const float*)&input[i]);
-      auto b = _mm256_load_ps((const float*)&input[i + quarter_samples]);
-      auto c = _mm256_load_ps((const float*)&input[i + 2 * quarter_samples]);
-      auto d = _mm256_load_ps((const float*)&input[i + 3 * quarter_samples]);
+      MM a = load_ps(&input[i]);
+      MM b = load_ps(&input[i + quarter_samples]);
+      MM c = load_ps(&input[i + 2 * quarter_samples]);
+      MM d = load_ps(&input[i + 3 * quarter_samples]);
 
-      auto r0 = _mm256_add_ps(a, c);
-      auto r1 = _mm256_sub_ps(a, c);
-      auto r2 = _mm256_add_ps(b, d);
-      auto r3 = _mm256_sub_ps(b, d);
-      r3 = _mm256_xor_ps(_mm256_permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
+      MM r0 = add_ps(a, c);
+      MM r1 = sub_ps(a, c);
+      MM r2 = add_ps(b, d);
+      MM r3 = sub_ps(b, d);
+      r3 = xor_ps(permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
 
-      auto o0 = _mm256_add_ps(r0, r2); // { 0, 4, 8, 12 }
-      auto o1 = _mm256_add_ps(r1, r3); // { 1, 5, 9, 13 }
-      auto o2 = _mm256_sub_ps(r0, r2); // { 2, 6, 10, 14 }
-      auto o3 = _mm256_sub_ps(r1, r3); // { 3, 7, 11, 15 }
+      MM o0 = add_ps(r0, r2); // { 0, 4, 8, 12 }
+      MM o1 = add_ps(r1, r3); // { 1, 5, 9, 13 }
+      MM o2 = sub_ps(r0, r2); // { 2, 6, 10, 14 }
+      MM o3 = sub_ps(r1, r3); // { 3, 7, 11, 15 }
 
       // Transpose
-      auto o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1); // { 0, 1, 8, 9 }
-      auto o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1); // { 4, 5, 12, 13 }
-      auto o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3); // { 2, 3, 10, 11 }
-      auto o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3); // { 6, 7, 14, 15 }
+      MM o0o1_lo = (__m256)_mm256_unpacklo_pd((__m256d)o0, (__m256d)o1); // { 0, 1, 8, 9 }
+      MM o0o1_hi = (__m256)_mm256_unpackhi_pd((__m256d)o0, (__m256d)o1); // { 4, 5, 12, 13 }
+      MM o2o3_lo = (__m256)_mm256_unpacklo_pd((__m256d)o2, (__m256d)o3); // { 2, 3, 10, 11 }
+      MM o2o3_hi = (__m256)_mm256_unpackhi_pd((__m256d)o2, (__m256d)o3); // { 6, 7, 14, 15 }
       o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0));  // { 0, 1, 2, 3 }
       o1 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0));  // { 4, 5, 6, 7 }
       o2 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0));  // { 8, 9, 10, 11 }
       o3 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0));  // { 12, 13, 14, 15 }
 
       unsigned j = i << 2;
-      _mm256_store_ps((float*)&output[j +  0], o0);
-      _mm256_store_ps((float*)&output[j +  4], o1);
-      _mm256_store_ps((float*)&output[j +  8], o2);
-      _mm256_store_ps((float*)&output[j + 12], o3);
+      store_ps(&output[j +  0], o0);
+      store_ps(&output[j +  4], o1);
+      store_ps(&output[j +  8], o2);
+      store_ps(&output[j + 12], o3);
    }
 #else
    unsigned quarter_samples = samples >> 2;
@@ -895,36 +937,36 @@ static void __attribute__((noinline)) fft_forward_radix4_generic(complex<float> 
    {
       unsigned k = i & (p - 1);
 
-      auto w = _mm256_load_ps((const float*)&twiddles[k]);
-      auto w0 = _mm256_load_ps((const float*)&twiddles[p + k]);
-      auto w1 = _mm256_load_ps((const float*)&twiddles[2 * p + k]);
+      MM w = load_ps(&twiddles[k]);
+      MM w0 = load_ps(&twiddles[p + k]);
+      MM w1 = load_ps(&twiddles[2 * p + k]);
 
-      auto a = _mm256_load_ps((const float*)&input[i]);
-      auto b = _mm256_load_ps((const float*)&input[i + quarter_samples]);
-      auto c = _mm256_load_ps((const float*)&input[i + 2 * quarter_samples]);
-      auto d = _mm256_load_ps((const float*)&input[i + 3 * quarter_samples]);
+      MM a = load_ps(&input[i]);
+      MM b = load_ps(&input[i + quarter_samples]);
+      MM c = load_ps(&input[i + 2 * quarter_samples]);
+      MM d = load_ps(&input[i + 3 * quarter_samples]);
 
-      c = _mm256_cmul_ps(c, w);
-      d = _mm256_cmul_ps(d, w);
+      c = cmul_ps(c, w);
+      d = cmul_ps(d, w);
 
-      auto r0 = _mm256_add_ps(a, c);
-      auto r1 = _mm256_sub_ps(a, c);
-      auto r2 = _mm256_add_ps(b, d);
-      auto r3 = _mm256_sub_ps(b, d);
+      MM r0 = add_ps(a, c);
+      MM r1 = sub_ps(a, c);
+      MM r2 = add_ps(b, d);
+      MM r3 = sub_ps(b, d);
 
-      r2 = _mm256_cmul_ps(r2, w0);
-      r3 = _mm256_cmul_ps(r3, w1);
+      r2 = cmul_ps(r2, w0);
+      r3 = cmul_ps(r3, w1);
 
-      auto o0 = _mm256_add_ps(r0, r2);
-      auto o1 = _mm256_sub_ps(r0, r2);
-      auto o2 = _mm256_add_ps(r1, r3);
-      auto o3 = _mm256_sub_ps(r1, r3);
+      MM o0 = add_ps(r0, r2);
+      MM o1 = sub_ps(r0, r2);
+      MM o2 = add_ps(r1, r3);
+      MM o3 = sub_ps(r1, r3);
 
       unsigned j = ((i - k) << 2) + k;
-      _mm256_store_ps((float*)&output[j + 0], o0);
-      _mm256_store_ps((float*)&output[j + 1 * p], o2);
-      _mm256_store_ps((float*)&output[j + 2 * p], o1);
-      _mm256_store_ps((float*)&output[j + 3 * p], o3);
+      store_ps(&output[j + 0], o0);
+      store_ps(&output[j + 1 * p], o2);
+      store_ps(&output[j + 2 * p], o1);
+      store_ps(&output[j + 3 * p], o3);
    }
 #else
    unsigned quarter_samples = samples >> 2;
@@ -968,19 +1010,19 @@ static void __attribute__((noinline)) fft_forward_radix2_p1(complex<float> *outp
    unsigned half_samples = samples >> 1;
    for (unsigned i = 0; i < half_samples; i += 4)
    {
-      auto a = _mm256_load_ps((const float*)&input[i]);
-      auto b = _mm256_load_ps((const float*)&input[i + half_samples]);
+      MM a = load_ps(&input[i]);
+      MM b = load_ps(&input[i + half_samples]);
 
-      auto r0 = _mm256_add_ps(a, b); // { 0, 2, 4, 6 }
-      auto r1 = _mm256_sub_ps(a, b); // { 1, 3, 5, 7 }
+      MM r0 = add_ps(a, b); // { 0, 2, 4, 6 }
+      MM r1 = sub_ps(a, b); // { 1, 3, 5, 7 }
       a = (__m256)_mm256_unpacklo_pd((__m256d)r0, (__m256d)r1); // { 0, 1, 4, 5 }
       b = (__m256)_mm256_unpackhi_pd((__m256d)r0, (__m256d)r1); // { 2, 3, 6, 7 }
       r0 = _mm256_permute2f128_ps(a, b, (2 << 4) | (0 << 0)); // { 0, 1, 2, 3 }
       r1 = _mm256_permute2f128_ps(a, b, (3 << 4) | (1 << 0)); // { 4, 5, 6, 7 }
 
       unsigned j = i << 1;
-      _mm256_store_ps((float*)&output[j + 0], r0);
-      _mm256_store_ps((float*)&output[j + 4], r1);
+      store_ps(&output[j + 0], r0);
+      store_ps(&output[j + 4], r1);
    }
 #else
    unsigned half_samples = samples >> 1;
@@ -1001,22 +1043,22 @@ static void __attribute__((noinline)) fft_forward_radix2_p2(complex<float> *outp
 {
 #if SIMD
    unsigned half_samples = samples >> 1;
-   const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, 0.0f, 0.0f, -0.0f, 0.0f, 0.0f, 0.0f);
+   const MM flip_signs = splat_const_dual_complex(0.0f, 0.0f, 0.0f, -0.0f);
 
    for (unsigned i = 0; i < half_samples; i += 4)
    {
-      auto a = _mm256_load_ps((const float*)&input[i]);
-      auto b = _mm256_load_ps((const float*)&input[i + half_samples]);
-      b = _mm256_xor_ps(_mm256_permute_ps(b, _MM_SHUFFLE(2, 3, 1, 0)), flip_signs);
+      MM a = load_ps(&input[i]);
+      MM b = load_ps(&input[i + half_samples]);
+      b = xor_ps(permute_ps(b, _MM_SHUFFLE(2, 3, 1, 0)), flip_signs);
 
-      auto r0 = _mm256_add_ps(a, b); // { c0, c1, c4, c5 }
-      auto r1 = _mm256_sub_ps(a, b); // { c2, c3, c6, c7 }
+      MM r0 = add_ps(a, b); // { c0, c1, c4, c5 }
+      MM r1 = sub_ps(a, b); // { c2, c3, c6, c7 }
       a = _mm256_permute2f128_ps(r0, r1, (2 << 4) | (0 << 0));
       b = _mm256_permute2f128_ps(r0, r1, (3 << 4) | (1 << 0));
 
       unsigned j = i << 1;
-      _mm256_store_ps((float*)&output[j + 0], a);
-      _mm256_store_ps((float*)&output[j + 4], b);
+      store_ps(&output[j + 0], a);
+      store_ps(&output[j + 4], b);
    }
 #else
    unsigned half_samples = samples >> 1;
@@ -1043,17 +1085,17 @@ static void __attribute__((noinline)) fft_forward_radix2_generic(complex<float> 
    {
       unsigned k = i & (p - 1);
 
-      auto w = _mm256_load_ps((const float*)&twiddles[k]);
-      auto a = _mm256_load_ps((const float*)&input[i]);
-      auto b = _mm256_load_ps((const float*)&input[i + half_samples]);
-      b = _mm256_cmul_ps(b, w);
+      MM w = load_ps(&twiddles[k]);
+      MM a = load_ps(&input[i]);
+      MM b = load_ps(&input[i + half_samples]);
+      b = cmul_ps(b, w);
 
-      auto r0 = _mm256_add_ps(a, b);
-      auto r1 = _mm256_sub_ps(a, b);
+      MM r0 = add_ps(a, b);
+      MM r1 = sub_ps(a, b);
 
       unsigned j = (i << 1) - k;
-      _mm256_store_ps((float*)&output[j + 0], r0);
-      _mm256_store_ps((float*)&output[j + p], r1);
+      store_ps(&output[j + 0], r0);
+      store_ps(&output[j + p], r1);
    }
 #else
    unsigned half_samples = samples >> 1;
@@ -1259,7 +1301,7 @@ int main()
    if (!p)
       return 1;
 
-   memcpy(in, input, sizeof(input));
+   memcpy(in, input, Nx * Ny * sizeof(fftw_complex));
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
       fftwf_execute(p);
