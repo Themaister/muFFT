@@ -8,12 +8,12 @@
 #define Nx (8 * 8)
 #define Ny (8 * 8)
 
-#define ITERATIONS 1
-#define RADIX2 1
-#define RADIX4 1
+#define ITERATIONS 1000000
+#define RADIX2 0
+#define RADIX4 0
 #define RADIX8 1
-#define FFTW 1
-#define DEBUG 1
+#define FFTW 0
+#define DEBUG 0
 #define SIMD 1
 
 #if SIMD
@@ -21,6 +21,8 @@
 #include <immintrin.h>
 #elif __SSE3__
 #include <pmmintrin.h>
+#elif __SSE__
+#include <xmmintrin.h>
 #endif
 #endif
 
@@ -56,27 +58,39 @@ static inline complex<float> twiddle(int direction, int k, int p)
 #define splat_complex(addr) ((__m256)_mm256_broadcast_sd((const double*)(addr)))
 #define unpacklo_pd(a, b) ((__m256)_mm256_unpacklo_pd((__m256d)(a), (__m256d)(b)))
 #define unpackhi_pd(a, b) ((__m256)_mm256_unpackhi_pd((__m256d)(a), (__m256d)(b)))
-#elif __SSE3__
+#else
 #define MM __m128
 #define VSIZE 2 // Complex numbers per vector
 #define permute_ps(a, x) _mm_shuffle_ps(a, a, x)
-#define moveldup_ps(x) permute_ps(x, _MM_SHUFFLE(2, 2, 0, 0))
-#define movehdup_ps(x) permute_ps(x, _MM_SHUFFLE(3, 3, 1, 1))
 #define xor_ps(a, b) _mm_xor_ps(a, b)
 #define add_ps(a, b) _mm_add_ps(a, b)
 #define sub_ps(a, b) _mm_sub_ps(a, b)
 #define mul_ps(a, b) _mm_mul_ps(a, b)
-#define addsub_ps(a, b) _mm_addsub_ps(a, b)
 #define load_ps(addr) _mm_load_ps((const float*)(addr))
 #define store_ps(addr, x) _mm_store_ps((float*)(addr), x)
 #define splat_const_complex(real, imag) _mm_set_ps(imag, real, imag, real)
 #define splat_const_dual_complex(a, b, real, imag) _mm_set_ps(imag, real, b, a)
 #define unpacklo_pd(a, b) ((__m128)_mm_unpacklo_pd((__m128d)(a), (__m128d)(b)))
 #define unpackhi_pd(a, b) ((__m128)_mm_unpackhi_pd((__m128d)(a), (__m128d)(b)))
+
+#if __SSE3__
+#define addsub_ps(a, b) _mm_addsub_ps(a, b)
+#define moveldup_ps(x) _mm_moveldup_ps(x)
+#define movehdup_ps(x) _mm_movehdup_ps(x)
+#else
+#define moveldup_ps(x) permute_ps(x, _MM_SHUFFLE(2, 2, 0, 0))
+#define movehdup_ps(x) permute_ps(x, _MM_SHUFFLE(3, 3, 1, 1))
+static inline __m128 addsub_ps(__m128 a, __m128 b)
+{
+   const MM flip_signs = splat_const_complex(-0.0f, 0.0f);
+   return add_ps(a, xor_ps(b, flip_signs));
+}
+#endif
+
 static inline __m128 splat_complex(const void *ptr)
 {
    __m128d reg = _mm_load_sd((const double*)ptr);
-   return _mm_unpacklo_pd(reg, reg);
+   return (__m128)_mm_unpacklo_pd(reg, reg);
 }
 #endif
 
@@ -1033,7 +1047,7 @@ static void __attribute__((noinline)) fft_forward_radix2_p1(complex<float> *outp
 {
 #if SIMD
    unsigned half_samples = samples >> 1;
-   for (unsigned i = 0; i < half_samples; i += 4)
+   for (unsigned i = 0; i < half_samples; i += VSIZE)
    {
       MM a = load_ps(&input[i]);
       MM b = load_ps(&input[i + half_samples]);
