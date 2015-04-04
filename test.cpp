@@ -5,15 +5,15 @@
 
 #include <fftw3.h>
 
-#define Nx (8 * 8)
-#define Ny (8 * 8)
+#define Nx (8 * 8 * 8 * 8)
+#define Ny (8 * 8 * 8 * 8)
 
-#define ITERATIONS 1
-#define RADIX2 1
-#define RADIX4 1
+#define ITERATIONS 10
+#define RADIX2 0
+#define RADIX4 0
 #define RADIX8 1
-#define FFTW 1
-#define DEBUG 1
+#define FFTW 0
+#define DEBUG 0
 #define SIMD 1
 
 #if SIMD
@@ -1070,12 +1070,21 @@ static void __attribute__((noinline)) fft_forward_radix2_generic(complex<float> 
 #endif
 }
 
+template<typename T>
+T *allocate(size_t count)
+{
+   void *ptr = nullptr;
+   if (posix_memalign(&ptr, 64, count * sizeof(T)) < 0)
+      return nullptr;
+   return static_cast<T*>(ptr);
+}
+
 int main()
 {
-   alignas(64) complex<float> twiddles[Nx * Ny];
-   alignas(64) complex<float> input[Nx * Ny];
-   alignas(64) complex<float> tmp0[Nx * Ny];
-   alignas(64) complex<float> tmp1[Nx * Ny];
+   auto twiddles = allocate<complex<float>>(Nx * Ny);
+   auto input = allocate<complex<float>>(Nx * Ny);
+   auto tmp0 = allocate<complex<float>>(Nx * Ny);
+   auto tmp1 = allocate<complex<float>>(Nx * Ny);
 
    auto *pt = twiddles;
    for (unsigned p = 1; p < Nx; p <<= 1)
@@ -1246,7 +1255,7 @@ int main()
    in = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
    out = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
 
-   p = fftwf_plan_dft_2d(Nx, Ny, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_ESTIMATE);
+   p = fftwf_plan_dft_2d(Nx, Ny, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_MEASURE);
    if (!p)
       return 1;
 
@@ -1263,5 +1272,10 @@ int main()
    fftwf_free(in);
    fftwf_free(out);
 #endif
+
+   free(tmp0);
+   free(tmp1);
+   free(input);
+   free(twiddles);
 }
 
