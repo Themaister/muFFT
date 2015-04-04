@@ -117,6 +117,7 @@ static inline MM cmul_ps(MM a, MM b)
 static void __attribute__((noinline)) fft_forward_radix2_p1_vert(cfloat *output, const cfloat *input,
       const cfloat *twiddles, unsigned samples_x, unsigned samples_y)
 {
+   (void)twiddles;
 #if SIMD
    unsigned half_stride = samples_x * (samples_x >> 1);
    unsigned half_lines = samples_y >> 1;
@@ -215,6 +216,7 @@ static void __attribute__((noinline)) fft_forward_radix2_generic_vert(cfloat *ou
 static void __attribute__((noinline)) fft_forward_radix4_p1_vert(cfloat *output, const cfloat *input,
       const cfloat *twiddles, unsigned samples_x, unsigned samples_y)
 {
+   (void)twiddles;
 #if SIMD
    unsigned quarter_stride = samples_x * (samples_x >> 2);
    unsigned quarter_lines = samples_y >> 2;
@@ -627,6 +629,7 @@ static void __attribute__((noinline)) fft_forward_radix8_generic_vert(cfloat *ou
 static void __attribute__((noinline)) fft_forward_radix8_p1(cfloat *output, const cfloat *input,
       const cfloat *twiddles, unsigned samples)
 {
+   (void)twiddles;
 #if SIMD
    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
    const MM w_f = splat_const_complex(+M_SQRT_2, -M_SQRT_2);
@@ -1093,6 +1096,7 @@ static void __attribute__((noinline)) fft_forward_radix2_p1(cfloat *output, cons
 static void __attribute__((noinline)) fft_forward_radix2_p2(cfloat *output, const cfloat *input,
       const cfloat *twiddles, unsigned samples)
 {
+   (void)twiddles;
 #if SIMD
    unsigned half_samples = samples >> 1;
    const MM flip_signs = splat_const_dual_complex(0.0f, 0.0f, 0.0f, -0.0f);
