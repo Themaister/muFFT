@@ -8,13 +8,13 @@
 #define Nx (8 * 8)
 #define Ny (8 * 8)
 
-#define ITERATIONS 1000000
-#define RADIX2 0
-#define RADIX4 0
+#define ITERATIONS 1
+#define RADIX2 1
+#define RADIX4 1
 #define RADIX8 1
-#define FFTW 0
-#define DEBUG 0
-#define SIMD 1
+#define FFTW 1
+#define DEBUG 1
+#define SIMD 0
 
 #if SIMD
 #if __AVX__
@@ -31,11 +31,12 @@
 #endif
 
 using namespace std;
+typedef complex<float> cfloat;
 
-static inline complex<float> twiddle(int direction, int k, int p)
+static inline cfloat twiddle(int direction, int k, int p)
 {
    double phase = (M_PI * direction * k) / p;
-   return complex<float>(cos(phase), sin(phase));
+   return cfloat(cos(phase), sin(phase));
 }
 
 #if SIMD
@@ -106,8 +107,8 @@ static inline MM cmul_ps(MM a, MM b)
 
 #endif
 
-static void __attribute__((noinline)) fft_forward_radix2_p1_vert(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
+static void __attribute__((noinline)) fft_forward_radix2_p1_vert(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned samples_x, unsigned samples_y)
 {
 #if SIMD
    unsigned half_stride = samples_x * (samples_x >> 1);
@@ -137,11 +138,11 @@ static void __attribute__((noinline)) fft_forward_radix2_p1_vert(complex<float> 
    {
       for (unsigned i = 0; i < samples_x; i++)
       {
-         auto a = input[i];
-         auto b = input[i + half_stride];
+         cfloat a = input[i];
+         cfloat b = input[i + half_stride];
 
-         auto r0 = a + b; // 0O + 0
-         auto r1 = a - b; // 0O + 1
+         cfloat r0 = a + b; // 0O + 0
+         cfloat r1 = a - b; // 0O + 1
 
          output[i] = r0;
          output[i + 1 * samples_x] = r1;
@@ -150,8 +151,8 @@ static void __attribute__((noinline)) fft_forward_radix2_p1_vert(complex<float> 
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix2_generic_vert(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+static void __attribute__((noinline)) fft_forward_radix2_generic_vert(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
 #if SIMD
    unsigned half_stride = samples_x * (samples_x >> 1);
@@ -191,11 +192,11 @@ static void __attribute__((noinline)) fft_forward_radix2_generic_vert(complex<fl
 
       for (unsigned i = 0; i < samples_x; i++)
       {
-         auto a = input[i];
-         auto b = twiddles[k] * input[i + half_stride];
+         cfloat a = input[i];
+         cfloat b = twiddles[k] * input[i + half_stride];
 
-         auto r0 = a + b; // 0O + 0
-         auto r1 = a - b; // 0O + 1
+         cfloat r0 = a + b; // 0O + 0
+         cfloat r1 = a - b; // 0O + 1
 
          output[i + j] = r0;
          output[i + j + 1 * out_stride] = r1;
@@ -204,8 +205,8 @@ static void __attribute__((noinline)) fft_forward_radix2_generic_vert(complex<fl
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix4_p1_vert(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
+static void __attribute__((noinline)) fft_forward_radix4_p1_vert(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned samples_x, unsigned samples_y)
 {
 #if SIMD
    unsigned quarter_stride = samples_x * (samples_x >> 2);
@@ -248,18 +249,18 @@ static void __attribute__((noinline)) fft_forward_radix4_p1_vert(complex<float> 
    {
       for (unsigned i = 0; i < samples_x; i++)
       {
-         auto a = input[i];
-         auto b = input[i + quarter_stride];
-         auto c = input[i + 2 * quarter_stride];
-         auto d = input[i + 3 * quarter_stride];
+         cfloat a = input[i];
+         cfloat b = input[i + quarter_stride];
+         cfloat c = input[i + 2 * quarter_stride];
+         cfloat d = input[i + 3 * quarter_stride];
 
-         auto r0 = a + c; // 0O + 0
-         auto r1 = a - c; // 0O + 1
-         auto r2 = b + d; // 2O + 0
-         auto r3 = b - d; // 2O + 1
+         cfloat r0 = a + c; // 0O + 0
+         cfloat r1 = a - c; // 0O + 1
+         cfloat r2 = b + d; // 2O + 0
+         cfloat r3 = b - d; // 2O + 1
 
          // p == 2 twiddles
-         r3 = complex<float>(r3.imag(), -r3.real());
+         r3 = cfloat(r3.imag(), -r3.real());
 
          a = r0 + r2; // 0O + 0
          b = r1 + r3; // 0O + 1
@@ -275,8 +276,8 @@ static void __attribute__((noinline)) fft_forward_radix4_p1_vert(complex<float> 
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
+static void __attribute__((noinline)) fft_forward_radix8_p1_vert(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned samples_x, unsigned samples_y)
 {
 #if SIMD
    unsigned octa_stride = samples_x * (samples_x >> 3);
@@ -348,27 +349,27 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> 
    {
       for (unsigned i = 0; i < samples_x; i++)
       {
-         auto a = input[i];
-         auto b = input[i + octa_stride];
-         auto c = input[i + 2 * octa_stride];
-         auto d = input[i + 3 * octa_stride];
-         auto e = input[i + 4 * octa_stride];
-         auto f = input[i + 5 * octa_stride];
-         auto g = input[i + 6 * octa_stride];
-         auto h = input[i + 7 * octa_stride];
+         cfloat a = input[i];
+         cfloat b = input[i + octa_stride];
+         cfloat c = input[i + 2 * octa_stride];
+         cfloat d = input[i + 3 * octa_stride];
+         cfloat e = input[i + 4 * octa_stride];
+         cfloat f = input[i + 5 * octa_stride];
+         cfloat g = input[i + 6 * octa_stride];
+         cfloat h = input[i + 7 * octa_stride];
 
-         auto r0 = a + e; // 0O + 0
-         auto r1 = a - e; // 0O + 1
-         auto r2 = b + f; // 2O + 0
-         auto r3 = b - f; // 2O + 1
-         auto r4 = c + g; // 4O + 0
-         auto r5 = c - g; // 4O + 1
-         auto r6 = d + h; // 60 + 0
-         auto r7 = d - h; // 6O + 1
+         cfloat r0 = a + e; // 0O + 0
+         cfloat r1 = a - e; // 0O + 1
+         cfloat r2 = b + f; // 2O + 0
+         cfloat r3 = b - f; // 2O + 1
+         cfloat r4 = c + g; // 4O + 0
+         cfloat r5 = c - g; // 4O + 1
+         cfloat r6 = d + h; // 60 + 0
+         cfloat r7 = d - h; // 6O + 1
 
          // p == 2 twiddles
-         r5 = complex<float>(r5.imag(), -r5.real());
-         r7 = complex<float>(r7.imag(), -r7.real());
+         r5 = cfloat(r5.imag(), -r5.real());
+         r7 = cfloat(r7.imag(), -r7.real());
 
          a = r0 + r4; // 0O + 0
          b = r1 + r5; // 0O + 1
@@ -398,8 +399,8 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> 
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+static void __attribute__((noinline)) fft_forward_radix4_generic_vert(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
 #if SIMD
    unsigned quarter_stride = samples_x * (samples_x >> 2);
@@ -452,15 +453,15 @@ static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<fl
 
       for (unsigned i = 0; i < samples_x; i++)
       {
-         auto a = input[i];
-         auto b = input[i + quarter_stride];
-         auto c = twiddles[k] * input[i + 2 * quarter_stride];
-         auto d = twiddles[k] * input[i + 3 * quarter_stride];
+         cfloat a = input[i];
+         cfloat b = input[i + quarter_stride];
+         cfloat c = twiddles[k] * input[i + 2 * quarter_stride];
+         cfloat d = twiddles[k] * input[i + 3 * quarter_stride];
 
-         auto r0 = a + c; // 0O + 0
-         auto r1 = a - c; // 0O + 1
-         auto r2 = b + d; // 2O + 0
-         auto r3 = b - d; // 2O + 1
+         cfloat r0 = a + c; // 0O + 0
+         cfloat r1 = a - c; // 0O + 1
+         cfloat r2 = b + d; // 2O + 0
+         cfloat r3 = b - d; // 2O + 1
 
          r2 *= twiddles[p + k];
          r3 *= twiddles[p + k + p];
@@ -479,8 +480,8 @@ static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<fl
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+static void __attribute__((noinline)) fft_forward_radix8_generic_vert(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
 #if SIMD
    unsigned octa_stride = samples_x * (samples_x >> 3);
@@ -565,23 +566,23 @@ static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<fl
 
       for (unsigned i = 0; i < samples_x; i++)
       {
-         auto a = input[i];
-         auto b = input[i + octa_stride];
-         auto c = input[i + 2 * octa_stride];
-         auto d = input[i + 3 * octa_stride];
-         auto e = twiddles[k] * input[i + 4 * octa_stride];
-         auto f = twiddles[k] * input[i + 5 * octa_stride];
-         auto g = twiddles[k] * input[i + 6 * octa_stride];
-         auto h = twiddles[k] * input[i + 7 * octa_stride];
+         cfloat a = input[i];
+         cfloat b = input[i + octa_stride];
+         cfloat c = input[i + 2 * octa_stride];
+         cfloat d = input[i + 3 * octa_stride];
+         cfloat e = twiddles[k] * input[i + 4 * octa_stride];
+         cfloat f = twiddles[k] * input[i + 5 * octa_stride];
+         cfloat g = twiddles[k] * input[i + 6 * octa_stride];
+         cfloat h = twiddles[k] * input[i + 7 * octa_stride];
 
-         auto r0 = a + e; // 0O + 0
-         auto r1 = a - e; // 0O + 1
-         auto r2 = b + f; // 2O + 0
-         auto r3 = b - f; // 2O + 1
-         auto r4 = c + g; // 4O + 0
-         auto r5 = c - g; // 4O + 1
-         auto r6 = d + h; // 60 + 0
-         auto r7 = d - h; // 6O + 1
+         cfloat r0 = a + e; // 0O + 0
+         cfloat r1 = a - e; // 0O + 1
+         cfloat r2 = b + f; // 2O + 0
+         cfloat r3 = b - f; // 2O + 1
+         cfloat r4 = c + g; // 4O + 0
+         cfloat r5 = c - g; // 4O + 1
+         cfloat r6 = d + h; // 60 + 0
+         cfloat r7 = d - h; // 6O + 1
 
          r4 *= twiddles[p + k];
          r5 *= twiddles[p + k + p];
@@ -616,8 +617,8 @@ static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<fl
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned samples)
+static void __attribute__((noinline)) fft_forward_radix8_p1(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned samples)
 {
 #if SIMD
    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
@@ -712,27 +713,27 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *outp
    unsigned octa_samples = samples >> 3;
    for (unsigned i = 0; i < octa_samples; i++)
    {
-      auto a = input[i];
-      auto b = input[i + octa_samples];
-      auto c = input[i + 2 * octa_samples];
-      auto d = input[i + 3 * octa_samples];
-      auto e = input[i + 4 * octa_samples];
-      auto f = input[i + 5 * octa_samples];
-      auto g = input[i + 6 * octa_samples];
-      auto h = input[i + 7 * octa_samples];
+      cfloat a = input[i];
+      cfloat b = input[i + octa_samples];
+      cfloat c = input[i + 2 * octa_samples];
+      cfloat d = input[i + 3 * octa_samples];
+      cfloat e = input[i + 4 * octa_samples];
+      cfloat f = input[i + 5 * octa_samples];
+      cfloat g = input[i + 6 * octa_samples];
+      cfloat h = input[i + 7 * octa_samples];
 
-      auto r0 = a + e; // 0O + 0
-      auto r1 = a - e; // 0O + 1
-      auto r2 = b + f; // 2O + 0
-      auto r3 = b - f; // 2O + 1
-      auto r4 = c + g; // 4O + 0
-      auto r5 = c - g; // 4O + 1
-      auto r6 = d + h; // 60 + 0
-      auto r7 = d - h; // 6O + 1
+      cfloat r0 = a + e; // 0O + 0
+      cfloat r1 = a - e; // 0O + 1
+      cfloat r2 = b + f; // 2O + 0
+      cfloat r3 = b - f; // 2O + 1
+      cfloat r4 = c + g; // 4O + 0
+      cfloat r5 = c - g; // 4O + 1
+      cfloat r6 = d + h; // 60 + 0
+      cfloat r7 = d - h; // 6O + 1
 
       // p == 2 twiddles
-      r5 = complex<float>(r5.imag(), -r5.real());
-      r7 = complex<float>(r7.imag(), -r7.real());
+      r5 = cfloat(r5.imag(), -r5.real());
+      r7 = cfloat(r7.imag(), -r7.real());
 
       a = r0 + r4; // 0O + 0
       b = r1 + r5; // 0O + 1
@@ -762,8 +763,8 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *outp
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix8_generic(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned p, unsigned samples)
+static void __attribute__((noinline)) fft_forward_radix8_generic(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned p, unsigned samples)
 {
 #if SIMD
    unsigned octa_samples = samples >> 3;
@@ -843,23 +844,23 @@ static void __attribute__((noinline)) fft_forward_radix8_generic(complex<float> 
    for (unsigned i = 0; i < octa_samples; i++)
    {
       unsigned k = i & (p - 1);
-      auto a = input[i];
-      auto b = input[i + octa_samples];
-      auto c = input[i + 2 * octa_samples];
-      auto d = input[i + 3 * octa_samples];
-      auto e = twiddles[k] * input[i + 4 * octa_samples];
-      auto f = twiddles[k] * input[i + 5 * octa_samples];
-      auto g = twiddles[k] * input[i + 6 * octa_samples];
-      auto h = twiddles[k] * input[i + 7 * octa_samples];
+      cfloat a = input[i];
+      cfloat b = input[i + octa_samples];
+      cfloat c = input[i + 2 * octa_samples];
+      cfloat d = input[i + 3 * octa_samples];
+      cfloat e = twiddles[k] * input[i + 4 * octa_samples];
+      cfloat f = twiddles[k] * input[i + 5 * octa_samples];
+      cfloat g = twiddles[k] * input[i + 6 * octa_samples];
+      cfloat h = twiddles[k] * input[i + 7 * octa_samples];
 
-      auto r0 = a + e; // 0O + 0
-      auto r1 = a - e; // 0O + 1
-      auto r2 = b + f; // 2O + 0
-      auto r3 = b - f; // 2O + 1
-      auto r4 = c + g; // 4O + 0
-      auto r5 = c - g; // 4O + 1
-      auto r6 = d + h; // 60 + 0
-      auto r7 = d - h; // 6O + 1
+      cfloat r0 = a + e; // 0O + 0
+      cfloat r1 = a - e; // 0O + 1
+      cfloat r2 = b + f; // 2O + 0
+      cfloat r3 = b - f; // 2O + 1
+      cfloat r4 = c + g; // 4O + 0
+      cfloat r5 = c - g; // 4O + 1
+      cfloat r6 = d + h; // 60 + 0
+      cfloat r7 = d - h; // 6O + 1
 
       r4 *= twiddles[p + k];
       r5 *= twiddles[p + k + p];
@@ -894,7 +895,7 @@ static void __attribute__((noinline)) fft_forward_radix8_generic(complex<float> 
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix4_p1(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix4_p1(cfloat *output, const cfloat *input,
       unsigned samples)
 {
 #if SIMD
@@ -946,16 +947,16 @@ static void __attribute__((noinline)) fft_forward_radix4_p1(complex<float> *outp
    unsigned quarter_samples = samples >> 2;
    for (unsigned i = 0; i < quarter_samples; i++)
    {
-      auto a = input[i];
-      auto b = input[i + quarter_samples];
-      auto c = input[i + 2 * quarter_samples];
-      auto d = input[i + 3 * quarter_samples];
+      cfloat a = input[i];
+      cfloat b = input[i + quarter_samples];
+      cfloat c = input[i + 2 * quarter_samples];
+      cfloat d = input[i + 3 * quarter_samples];
 
-      auto r0 = a + c;
-      auto r1 = a - c;
-      auto r2 = b + d;
-      auto r3 = b - d;
-      r3 = complex<float>(r3.imag(), -r3.real());
+      cfloat r0 = a + c;
+      cfloat r1 = a - c;
+      cfloat r2 = b + d;
+      cfloat r3 = b - d;
+      r3 = cfloat(r3.imag(), -r3.real());
 
       unsigned j = i << 2;
       output[j + 0] = r0 + r2;
@@ -966,8 +967,8 @@ static void __attribute__((noinline)) fft_forward_radix4_p1(complex<float> *outp
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix4_generic(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned p, unsigned samples)
+static void __attribute__((noinline)) fft_forward_radix4_generic(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned p, unsigned samples)
 {
 #if SIMD
    unsigned quarter_samples = samples >> 2;
@@ -1013,25 +1014,25 @@ static void __attribute__((noinline)) fft_forward_radix4_generic(complex<float> 
    {
       unsigned k = i & (p - 1);
 
-      auto a = input[i];
-      auto b = input[i + quarter_samples];
-      auto c = twiddles[k] * input[i + 2 * quarter_samples];
-      auto d = twiddles[k] * input[i + 3 * quarter_samples];
+      cfloat a = input[i];
+      cfloat b = input[i + quarter_samples];
+      cfloat c = twiddles[k] * input[i + 2 * quarter_samples];
+      cfloat d = twiddles[k] * input[i + 3 * quarter_samples];
 
       // DFT-2
-      auto r0 = a + c;
-      auto r1 = a - c;
-      auto r2 = b + d;
-      auto r3 = b - d;
+      cfloat r0 = a + c;
+      cfloat r1 = a - c;
+      cfloat r2 = b + d;
+      cfloat r3 = b - d;
 
       r2 *= twiddles[p + k];
       r3 *= twiddles[p + k + p];
 
       // DFT-2
-      auto o0 = r0 + r2;
-      auto o1 = r0 - r2;
-      auto o2 = r1 + r3;
-      auto o3 = r1 - r3;
+      cfloat o0 = r0 + r2;
+      cfloat o1 = r0 - r2;
+      cfloat o2 = r1 + r3;
+      cfloat o3 = r1 - r3;
 
       unsigned j = ((i - k) << 2) + k;
       output[j +     0] = o0;
@@ -1042,7 +1043,7 @@ static void __attribute__((noinline)) fft_forward_radix4_generic(complex<float> 
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix2_p1(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix2_p1(cfloat *output, const cfloat *input,
       unsigned samples)
 {
 #if SIMD
@@ -1072,8 +1073,8 @@ static void __attribute__((noinline)) fft_forward_radix2_p1(complex<float> *outp
    unsigned half_samples = samples >> 1;
    for (unsigned i = 0; i < half_samples; i++)
    {
-      auto a = input[i];
-      auto b = input[i + half_samples]; 
+      cfloat a = input[i];
+      cfloat b = input[i + half_samples]; 
 
       unsigned j = i << 1;
       output[j + 0] = a + b;
@@ -1082,8 +1083,8 @@ static void __attribute__((noinline)) fft_forward_radix2_p1(complex<float> *outp
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix2_p2(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned samples)
+static void __attribute__((noinline)) fft_forward_radix2_p2(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned samples)
 {
 #if SIMD
    unsigned half_samples = samples >> 1;
@@ -1114,8 +1115,8 @@ static void __attribute__((noinline)) fft_forward_radix2_p2(complex<float> *outp
    for (unsigned i = 0; i < half_samples; i++)
    {
       unsigned k = i & (2 - 1);
-      auto a = input[i];
-      auto b = twiddles[k] * input[i + half_samples];
+      cfloat a = input[i];
+      cfloat b = twiddles[k] * input[i + half_samples];
 
       unsigned j = (i << 1) - k;
       output[j + 0] = a + b;
@@ -1124,8 +1125,8 @@ static void __attribute__((noinline)) fft_forward_radix2_p2(complex<float> *outp
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix2_generic(complex<float> *output, const complex<float> *input,
-      const complex<float> *twiddles, unsigned p, unsigned samples)
+static void __attribute__((noinline)) fft_forward_radix2_generic(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned p, unsigned samples)
 {
 #if SIMD
    unsigned half_samples = samples >> 1;
@@ -1151,8 +1152,8 @@ static void __attribute__((noinline)) fft_forward_radix2_generic(complex<float> 
    for (unsigned i = 0; i < half_samples; i++)
    {
       unsigned k = i & (p - 1);
-      auto a = input[i];
-      auto b = twiddles[k] * input[i + half_samples];
+      cfloat a = input[i];
+      cfloat b = twiddles[k] * input[i + half_samples];
 
       unsigned j = (i << 1) - k;
       output[j + 0] = a + b;
@@ -1172,12 +1173,12 @@ T *allocate(size_t count)
 
 int main()
 {
-   auto twiddles = allocate<complex<float>>(Nx * Ny);
-   auto input = allocate<complex<float>>(Nx * Ny);
-   auto tmp0 = allocate<complex<float>>(Nx * Ny);
-   auto tmp1 = allocate<complex<float>>(Nx * Ny);
+   cfloat *twiddles = allocate<cfloat>(Nx * Ny);
+   cfloat *input = allocate<cfloat>(Nx * Ny);
+   cfloat *tmp0 = allocate<cfloat>(Nx * Ny);
+   cfloat *tmp1 = allocate<cfloat>(Nx * Ny);
 
-   auto *pt = twiddles;
+   cfloat *pt = twiddles;
    for (unsigned p = 1; p < Nx; p <<= 1)
    {
       for (unsigned k = 0; k < p; k++)
@@ -1192,7 +1193,7 @@ int main()
    {
       float real = float(rand()) / RAND_MAX - 0.5f;
       float imag = float(rand()) / RAND_MAX - 0.5f;
-      input[i] = complex<float>(real, imag);
+      input[i] = cfloat(real, imag);
    }
 
 #if RADIX2
@@ -1200,8 +1201,8 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      complex<float> *out = nullptr;
-      complex<float> *in = nullptr;
+      cfloat *out = nullptr;
+      cfloat *in = nullptr;
 
       // Horizontals
       for (unsigned y = 0; y < Ny; y++)
@@ -1253,8 +1254,8 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      complex<float> *out = nullptr;
-      complex<float> *in = nullptr;
+      cfloat *out = nullptr;
+      cfloat *in = nullptr;
 
       // Horizontals
       for (unsigned y = 0; y < Ny; y++)
@@ -1299,8 +1300,8 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
-      complex<float> *out = nullptr;
-      complex<float> *in = nullptr;
+      cfloat *out = nullptr;
+      cfloat *in = nullptr;
 
       // Horizontals
       for (unsigned y = 0; y < Ny; y++)
@@ -1341,10 +1342,10 @@ int main()
 #endif
 
 #if FFTW
-   complex<float> *in, *out;
+   cfloat *in, *out;
    fftwf_plan p;
-   in = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
-   out = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
+   in = (cfloat*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
+   out = (cfloat*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
 
    p = fftwf_plan_dft_2d(Nx, Ny, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_MEASURE);
    if (!p)
