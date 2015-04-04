@@ -1,20 +1,26 @@
 
 #include <complex>
 #include <cmath>
-#include <immintrin.h>
-#include <assert.h>
+#include <string.h>
 
 #include <fftw3.h>
 
-#define N (8 * 8)
-#define ITERATIONS 100000000
+#define N (8 * 8 * 8 * 8 * 8)
+#define ITERATIONS 10000
 #define RADIX2 0
 #define RADIX4 0
-#define RADIX8 1
-#define FFTW 0
+#define RADIX8 0
+#define FFTW 1
 #define DEBUG 0
+#define SIMD 1
 
+#if SIMD
+#include <immintrin.h>
+#endif
+
+#ifndef M_SQRT_2
 #define M_SQRT_2 0.707106781186547524401
+#endif
 
 using namespace std;
 
@@ -24,6 +30,7 @@ static inline complex<float> twiddle(int direction, int k, int p)
    return complex<float>(cos(phase), sin(phase));
 }
 
+#if SIMD
 static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
 {
    auto r3 = _mm256_permute_ps(a, _MM_SHUFFLE(2, 3, 0, 1));
@@ -33,10 +40,12 @@ static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
    auto R1 = _mm256_mul_ps(r2, r3);
    return _mm256_addsub_ps(R0, R1);
 }
+#endif
 
-void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned samples)
 {
+#if SIMD
    const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
    const auto w_f = _mm256_set_ps(-M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2, -M_SQRT_2, +M_SQRT_2);
    const auto w_h = _mm256_set_ps(-M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2, -M_SQRT_2);
@@ -113,8 +122,7 @@ void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *output, con
       _mm256_store_ps((float*)&output[j + 24], o6);
       _mm256_store_ps((float*)&output[j + 28], o7);
    }
-
-#if 0
+#else
    unsigned octa_samples = samples >> 3;
    for (unsigned i = 0; i < octa_samples; i++)
    {
@@ -168,9 +176,10 @@ void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *output, con
 #endif
 }
 
-static void fft_forward_radix8_generic(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix8_generic(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned p, unsigned samples)
 {
+#if SIMD
    unsigned octa_samples = samples >> 3;
    for (unsigned i = 0; i < octa_samples; i += 4)
    {
@@ -243,8 +252,7 @@ static void fft_forward_radix8_generic(complex<float> *output, const complex<flo
       _mm256_store_ps((float*)&output[j + 6 * p], o6);
       _mm256_store_ps((float*)&output[j + 7 * p], o7);
    }
-
-#if 0
+#else
    unsigned octa_samples = samples >> 3;
    for (unsigned i = 0; i < octa_samples; i++)
    {
@@ -300,12 +308,13 @@ static void fft_forward_radix8_generic(complex<float> *output, const complex<flo
 #endif
 }
 
-static void fft_forward_radix4_p1(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix4_p1(complex<float> *output, const complex<float> *input,
       unsigned samples)
 {
+#if SIMD
    const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f, -0.0f, 0.0f);
-
    unsigned quarter_samples = samples >> 2;
+
    for (unsigned i = 0; i < quarter_samples; i += 4)
    {
       auto a = _mm256_load_ps((const float*)&input[i]);
@@ -340,8 +349,7 @@ static void fft_forward_radix4_p1(complex<float> *output, const complex<float> *
       _mm256_store_ps((float*)&output[j +  8], o2);
       _mm256_store_ps((float*)&output[j + 12], o3);
    }
-
-#if 0
+#else
    unsigned quarter_samples = samples >> 2;
    for (unsigned i = 0; i < quarter_samples; i++)
    {
@@ -365,9 +373,10 @@ static void fft_forward_radix4_p1(complex<float> *output, const complex<float> *
 #endif
 }
 
-static void fft_forward_radix4_generic(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix4_generic(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned p, unsigned samples)
 {
+#if SIMD
    unsigned quarter_samples = samples >> 2;
 
    for (unsigned i = 0; i < quarter_samples; i += 4)
@@ -405,8 +414,8 @@ static void fft_forward_radix4_generic(complex<float> *output, const complex<flo
       _mm256_store_ps((float*)&output[j + 2 * p], o1);
       _mm256_store_ps((float*)&output[j + 3 * p], o3);
    }
-
-#if 0
+#else
+   unsigned quarter_samples = samples >> 2;
    for (unsigned i = 0; i < quarter_samples; i++)
    {
       unsigned k = i & (p - 1);
@@ -440,9 +449,10 @@ static void fft_forward_radix4_generic(complex<float> *output, const complex<flo
 #endif
 }
 
-static void fft_forward_radix2_p1(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix2_p1(complex<float> *output, const complex<float> *input,
       unsigned samples)
 {
+#if SIMD
    unsigned half_samples = samples >> 1;
    for (unsigned i = 0; i < half_samples; i += 4)
    {
@@ -460,8 +470,7 @@ static void fft_forward_radix2_p1(complex<float> *output, const complex<float> *
       _mm256_store_ps((float*)&output[j + 0], r0);
       _mm256_store_ps((float*)&output[j + 4], r1);
    }
-
-#if 0
+#else
    unsigned half_samples = samples >> 1;
    for (unsigned i = 0; i < half_samples; i++)
    {
@@ -475,9 +484,10 @@ static void fft_forward_radix2_p1(complex<float> *output, const complex<float> *
 #endif
 }
 
-static void fft_forward_radix2_p2(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix2_p2(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned samples)
 {
+#if SIMD
    unsigned half_samples = samples >> 1;
    const auto flip_signs = _mm256_set_ps(-0.0f, 0.0f, 0.0f, 0.0f, -0.0f, 0.0f, 0.0f, 0.0f);
 
@@ -496,8 +506,7 @@ static void fft_forward_radix2_p2(complex<float> *output, const complex<float> *
       _mm256_store_ps((float*)&output[j + 0], a);
       _mm256_store_ps((float*)&output[j + 4], b);
    }
-
-#if 0
+#else
    unsigned half_samples = samples >> 1;
    for (unsigned i = 0; i < half_samples; i++)
    {
@@ -512,9 +521,10 @@ static void fft_forward_radix2_p2(complex<float> *output, const complex<float> *
 #endif
 }
 
-static void fft_forward_radix2_generic(complex<float> *output, const complex<float> *input,
+static void __attribute__((noinline)) fft_forward_radix2_generic(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned p, unsigned samples)
 {
+#if SIMD
    unsigned half_samples = samples >> 1;
 
    for (unsigned i = 0; i < half_samples; i += 4)
@@ -533,8 +543,7 @@ static void fft_forward_radix2_generic(complex<float> *output, const complex<flo
       _mm256_store_ps((float*)&output[j + 0], r0);
       _mm256_store_ps((float*)&output[j + p], r1);
    }
-
-#if 0
+#else
    unsigned half_samples = samples >> 1;
    for (unsigned i = 0; i < half_samples; i++)
    {
@@ -551,10 +560,10 @@ static void fft_forward_radix2_generic(complex<float> *output, const complex<flo
 
 int main()
 {
-   complex<float> twiddles[N] __attribute__((aligned(64)));
-   complex<float> input[N] __attribute__((aligned(64)));
-   complex<float> tmp0[N] __attribute__((aligned(64)));
-   complex<float> tmp1[N] __attribute__((aligned(64)));
+   alignas(64) complex<float> twiddles[N];
+   alignas(64) complex<float> input[N];
+   alignas(64) complex<float> tmp0[N];
+   alignas(64) complex<float> tmp1[N];
 
    auto *pt = twiddles;
    for (unsigned p = 1; p < N; p <<= 1)
@@ -566,8 +575,13 @@ int main()
          pt++;
    }
 
+   srand(0);
    for (unsigned i = 0; i < N; i++)
-      input[i] = complex<float>(5.0f - i, i);
+   {
+      float real = float(rand()) / RAND_MAX - 0.5f;
+      float imag = float(rand()) / RAND_MAX - 0.5f;
+      input[i] = complex<float>(real, imag);
+   }
 
 #if RADIX2
    // Radix-2
@@ -659,8 +673,7 @@ int main()
    if (!p)
       return 1;
 
-   for (unsigned i = 0; i < N; i++)
-      in[i] = complex<float>(5.0f - i, i);
+   memcpy(in, input, sizeof(input));
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
       fftwf_execute(p);
