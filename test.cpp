@@ -9,9 +9,9 @@
 #define Ny (8 * 8)
 
 #define ITERATIONS 1
-#define RADIX2 0
+#define RADIX2 1
 #define RADIX4 1
-#define RADIX8 0
+#define RADIX8 1
 #define FFTW 1
 #define DEBUG 1
 #define SIMD 1
@@ -43,6 +43,104 @@ static inline __m256 _mm256_cmul_ps(__m256 a, __m256 b)
    return _mm256_addsub_ps(R0, R1);
 }
 #endif
+
+static void __attribute__((noinline)) fft_forward_radix2_p1_vert(complex<float> *output, const complex<float> *input,
+      const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
+{
+#if SIMD
+   unsigned half_stride = samples_x * (samples_x >> 1);
+   unsigned half_lines = samples_y >> 1;
+
+   for (unsigned line = 0; line < half_lines;
+         line++, input += samples_x, output += samples_x << 1)
+   {
+      for (unsigned i = 0; i < samples_x; i += 4)
+      {
+         auto a = _mm256_load_ps((const float*)&input[i]);
+         auto b = _mm256_load_ps((const float*)&input[i + half_stride]);
+
+         auto r0 = _mm256_add_ps(a, b);
+         auto r1 = _mm256_sub_ps(a, b);
+
+         _mm256_store_ps((float*)&output[i], r0);
+         _mm256_store_ps((float*)&output[i + 1 * samples_x], r1);
+      }
+   }
+#else
+   unsigned half_stride = samples_x * (samples_x >> 1);
+   unsigned half_lines = samples_y >> 1;
+
+   for (unsigned line = 0; line < half_lines;
+         line++, input += samples_x, output += samples_x << 1)
+   {
+      for (unsigned i = 0; i < samples_x; i++)
+      {
+         auto a = input[i];
+         auto b = input[i + half_stride];
+
+         auto r0 = a + b; // 0O + 0
+         auto r1 = a - b; // 0O + 1
+
+         output[i] = r0;
+         output[i + 1 * samples_x] = r1;
+      }
+   }
+#endif
+}
+
+static void __attribute__((noinline)) fft_forward_radix2_generic_vert(complex<float> *output, const complex<float> *input,
+      const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+{
+#if SIMD
+   unsigned half_stride = samples_x * (samples_x >> 1);
+   unsigned half_lines = samples_y >> 1;
+   unsigned out_stride = p * samples_x;
+
+   for (unsigned line = 0; line < half_lines;
+         line++, input += samples_x)
+   {
+      unsigned k = line & (p - 1);
+      unsigned j = ((line << 1) - k) * samples_x;
+      const auto w = (__m256)_mm256_broadcast_sd((const double*)&twiddles[k]);
+
+      for (unsigned i = 0; i < samples_x; i += 4)
+      {
+         auto a = _mm256_load_ps((const float*)&input[i]);
+         auto b = _mm256_load_ps((const float*)&input[i + half_stride]);
+         b = _mm256_cmul_ps(b, w);
+
+         auto r0 = _mm256_add_ps(a, b);
+         auto r1 = _mm256_sub_ps(a, b);
+
+         _mm256_store_ps((float*)&output[i + j], r0);
+         _mm256_store_ps((float*)&output[i + j + 1 * out_stride], r1);
+      }
+   }
+#else
+   unsigned half_stride = samples_x * (samples_x >> 1);
+   unsigned half_lines = samples_y >> 1;
+   unsigned out_stride = p * samples_x;
+
+   for (unsigned line = 0; line < half_lines;
+         line++, input += samples_x)
+   {
+      unsigned k = line & (p - 1);
+      unsigned j = ((line << 1) - k) * samples_x;
+
+      for (unsigned i = 0; i < samples_x; i++)
+      {
+         auto a = input[i];
+         auto b = twiddles[k] * input[i + half_stride];
+
+         auto r0 = a + b; // 0O + 0
+         auto r1 = a - b; // 0O + 1
+
+         output[i + j] = r0;
+         output[i + j + 1 * out_stride] = r1;
+      }
+   }
+#endif
+}
 
 static void __attribute__((noinline)) fft_forward_radix4_p1_vert(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned samples_x, unsigned samples_y)
@@ -285,7 +383,7 @@ static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<fl
    unsigned quarter_lines = samples_y >> 2;
    unsigned out_stride = p * samples_x;
 
-   for (unsigned line = 0; line < octa_lines; line++, input += samples_x)
+   for (unsigned line = 0; line < quarter_lines; line++, input += samples_x)
    {
       unsigned k = line & (p - 1);
       unsigned j = (((line - k) << 2) + k) * samples_x;
@@ -294,8 +392,8 @@ static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<fl
       {
          auto a = input[i];
          auto b = input[i + quarter_stride];
-         auto c = input[i + 2 * quarter_stride];
-         auto d = input[i + 3 * quarter_stride];
+         auto c = twiddles[k] * input[i + 2 * quarter_stride];
+         auto d = twiddles[k] * input[i + 3 * quarter_stride];
 
          auto r0 = a + c; // 0O + 0
          auto r1 = a - c; // 0O + 1
@@ -318,7 +416,6 @@ static void __attribute__((noinline)) fft_forward_radix4_generic_vert(complex<fl
    }
 #endif
 }
-
 
 static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
@@ -1003,24 +1100,49 @@ int main()
 
    for (unsigned i = 0; i < ITERATIONS; i++)
    {
+      complex<float> *out = nullptr;
+      complex<float> *in = nullptr;
+
+      // Horizontals
+      for (unsigned y = 0; y < Ny; y++)
+      {
+         pt = twiddles;
+
+         fft_forward_radix2_p1(tmp0 + y * Nx, input + y * Nx, Nx);
+         pt += 1;
+         fft_forward_radix2_p2(tmp1 + y * Nx, tmp0 + y * Nx, pt, Nx);
+         pt += 3;
+         out = tmp0;
+         in = tmp1;
+
+         for (unsigned p = 4; p < Nx; p <<= 1)
+         {
+            fft_forward_radix2_generic(out + y * Nx, in + y * Nx, pt, p, Nx);
+            swap(out, in);
+            pt += p;
+         }
+      }
+
+      // Verticals
       pt = twiddles;
 
-      fft_forward_radix2_p1(tmp0, input, N);
+      fft_forward_radix2_p1_vert(out, in, pt, Nx, Ny);
       pt += 1;
-      fft_forward_radix2_p2(tmp1, tmp0, pt, N);
-      pt += 3;
+      swap(out, in);
 
-      auto *out = tmp0;
-      auto *in = tmp1;
-      for (unsigned p = 4; p < N; p <<= 1)
+      fft_forward_radix2_generic_vert(out, in, pt, 2, Nx, Ny);
+      pt += 3;
+      swap(out, in);
+
+      for (unsigned p = 4; p < Ny; p <<= 1)
       {
-         fft_forward_radix2_generic(out, in, pt, p, N);
+         fft_forward_radix2_generic_vert(out, in, pt, p, Nx, Ny);
          pt += p;
          swap(out, in);
       }
 
 #if DEBUG
-      for (unsigned i = 0; i < N; i++)
+      for (unsigned i = 0; i < Nx * Ny; i++)
          printf("Radix-2 FFT[%03u] = (%+8.3f, %+8.3f)\n", i, in[i].real(), in[i].imag());
 #endif
    }
