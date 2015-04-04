@@ -8,12 +8,12 @@
 #define Nx (8 * 8)
 #define Ny (8 * 8)
 
-#define ITERATIONS 1
+#define ITERATIONS 1000000
 #define RADIX2 0
 #define RADIX4 0
 #define RADIX8 1
-#define FFTW 1
-#define DEBUG 1
+#define FFTW 0
+#define DEBUG 0
 #define SIMD 1
 
 #if SIMD
@@ -170,6 +170,78 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(complex<float> 
 static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<float> *output, const complex<float> *input,
       const complex<float> *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
+#if SIMD
+   unsigned octa_stride = samples_x * (samples_x >> 3);
+   unsigned octa_lines = samples_y >> 3;
+   unsigned out_stride = p * samples_x;
+
+   for (unsigned line = 0; line < octa_lines; line++, input += samples_x)
+   {
+      unsigned k = line & (p - 1);
+      unsigned j = (((line - k) << 3) + k) * samples_x;
+
+      for (unsigned i = 0; i < samples_x; i += 4)
+      {
+         const auto w = (__m256)_mm256_broadcast_sd((const double*)&twiddles[k]);
+         auto a = _mm256_load_ps((const float*)&input[i]);
+         auto b = _mm256_load_ps((const float*)&input[i + octa_stride]);
+         auto c = _mm256_load_ps((const float*)&input[i + 2 * octa_stride]);
+         auto d = _mm256_load_ps((const float*)&input[i + 3 * octa_stride]);
+         auto e = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 4 * octa_stride]), w);
+         auto f = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 5 * octa_stride]), w);
+         auto g = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 6 * octa_stride]), w);
+         auto h = _mm256_cmul_ps(_mm256_load_ps((const float*)&input[i + 7 * octa_stride]), w);
+
+         auto r0 = _mm256_add_ps(a, e);
+         auto r1 = _mm256_sub_ps(a, e);
+         auto r2 = _mm256_add_ps(b, f);
+         auto r3 = _mm256_sub_ps(b, f);
+         auto r4 = _mm256_add_ps(c, g);
+         auto r5 = _mm256_sub_ps(c, g);
+         auto r6 = _mm256_add_ps(d, h);
+         auto r7 = _mm256_sub_ps(d, h);
+
+         auto w0 = (__m256)_mm256_broadcast_sd((const double*)&twiddles[p + k]);
+         auto w1 = (__m256)_mm256_broadcast_sd((const double*)&twiddles[p + k + p]);
+         r4 = _mm256_cmul_ps(r4, w0);
+         r5 = _mm256_cmul_ps(r5, w1);
+         r6 = _mm256_cmul_ps(r6, w0);
+         r7 = _mm256_cmul_ps(r7, w1);
+
+         a = _mm256_add_ps(r0, r4);
+         b = _mm256_add_ps(r1, r5);
+         c = _mm256_sub_ps(r0, r4);
+         d = _mm256_sub_ps(r1, r5);
+         e = _mm256_add_ps(r2, r6);
+         f = _mm256_add_ps(r3, r7);
+         g = _mm256_sub_ps(r2, r6);
+         h = _mm256_sub_ps(r3, r7);
+
+         e = _mm256_cmul_ps(e, (__m256)_mm256_broadcast_sd((const double*)&twiddles[3 * p + k]));
+         f = _mm256_cmul_ps(f, (__m256)_mm256_broadcast_sd((const double*)&twiddles[3 * p + k + p]));
+         g = _mm256_cmul_ps(g, (__m256)_mm256_broadcast_sd((const double*)&twiddles[3 * p + k + 2 * p]));
+         h = _mm256_cmul_ps(h, (__m256)_mm256_broadcast_sd((const double*)&twiddles[3 * p + k + 3 * p]));
+
+         r0 = _mm256_add_ps(a, e);
+         r1 = _mm256_add_ps(b, f);
+         r2 = _mm256_add_ps(c, g);
+         r3 = _mm256_add_ps(d, h);
+         r4 = _mm256_sub_ps(a, e);
+         r5 = _mm256_sub_ps(b, f);
+         r6 = _mm256_sub_ps(c, g);
+         r7 = _mm256_sub_ps(d, h);
+
+         _mm256_store_ps((float*)&output[i + j + 0 * out_stride], r0);
+         _mm256_store_ps((float*)&output[i + j + 1 * out_stride], r1);
+         _mm256_store_ps((float*)&output[i + j + 2 * out_stride], r2);
+         _mm256_store_ps((float*)&output[i + j + 3 * out_stride], r3);
+         _mm256_store_ps((float*)&output[i + j + 4 * out_stride], r4);
+         _mm256_store_ps((float*)&output[i + j + 5 * out_stride], r5);
+         _mm256_store_ps((float*)&output[i + j + 6 * out_stride], r6);
+         _mm256_store_ps((float*)&output[i + j + 7 * out_stride], r7);
+      }
+   }
+#else
    unsigned octa_stride = samples_x * (samples_x >> 3);
    unsigned octa_lines = samples_y >> 3;
    unsigned out_stride = p * samples_x;
@@ -229,6 +301,7 @@ static void __attribute__((noinline)) fft_forward_radix8_generic_vert(complex<fl
          output[i + j + 7 * out_stride] = d - h;
       }
    }
+#endif
 }
 
 static void __attribute__((noinline)) fft_forward_radix8_p1(complex<float> *output, const complex<float> *input,
@@ -878,7 +951,7 @@ int main()
    in = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
    out = (complex<float>*)fftwf_malloc(sizeof(fftw_complex) * Nx * Ny);
 
-   p = fftwf_plan_dft_2d(Nx, Ny, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_MEASURE);
+   p = fftwf_plan_dft_2d(Nx, Ny, (fftwf_complex*)in, (fftwf_complex*)out, FFTW_FORWARD, FFTW_ESTIMATE);
    if (!p)
       return 1;
 
