@@ -25,21 +25,6 @@
 #endif
 #endif
 
-#ifndef M_PI
-#define M_PI 3.14159265359
-#endif
-
-#ifndef M_SQRT_2
-#define M_SQRT_2 0.707106781186547524401
-#endif
-
-#define SWAP(a, b) do { cfloat *tmp = b; b = a; a = tmp; } while(0)
-
-#undef I
-#define I _Complex_I
-
-typedef complex float cfloat;
-
 static inline cfloat twiddle(int direction, int k, int p)
 {
    double phase = (M_PI * direction * k) / p;
