@@ -20,6 +20,33 @@
 #define I _Complex_I
 
 typedef complex float cfloat;
+typedef void (*mufft_1d_func)(void *output, const void *input,
+      const cfloat *twiddles, unsigned p, unsigned samples);
+
+#define FFT_1D_FUNC(name, arch) void mufft_ ## name ## _ ## arch ## (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples);
+
+#define DECLARE_FFT_CPU(arch) \
+   FFT_1D_FUNC(forward_radix8_p1, arch) \
+   FFT_1D_FUNC(forward_radix4_p1, arch) \
+   FFT_1D_FUNC(forward_radix2_p1, arch) \
+   FFT_1D_FUNC(forward_radix2_p2, arch) \
+   FFT_1D_FUNC(radix8_generic, arch) \
+   FFT_1D_FUNC(radix4_generic, arch) \
+   FFT_1D_FUNC(radix2_generic, arch)
+
+DECLARE_FFT_CPU(avx)
+DECLARE_FFT_CPU(sse3)
+DECLARE_FFT_CPU(sse)
+DECLARE_FFT_CPU(c)
+
+#define MUFFT_FLAG_MASK_CPU ((1 << 16) - 1)
+#define MUFFT_FLAG_CPU_AVX (1 << 0)
+#define MUFFT_FLAG_CPU_SSE3 (1 << 1)
+#define MUFFT_FLAG_CPU_SSE (1 << 2)
+
+#define MUFFT_FLAG_DIRECTION_INVERSE (1 << 16)
+#define MUFFT_FLAG_DIRECTION_FORWARD (1 << 17)
+#define MUFFT_FLAG_DIRECTION_ANY (MUFFT_FLAG_DIRECTION_INVERSE | MUFFT_FLAG_DIRECTION_FORWARD)
 
 #endif
 

@@ -6,8 +6,8 @@
 struct mufft_step_1d
 {
    mufft_1d_func func;
+   unsigned radix;
    unsigned p;
-   unsigned twiddle_step;
 };
 
 struct mufft_plan_1d
@@ -47,12 +47,89 @@ static cfloat *build_twiddles(unsigned N, int direction)
    return twiddles;
 }
 
-static bool add_step_1d(mufft_plan_1d *plan, const fft_step *step, unsigned p)
+struct fft_step_1d
+{
+   mufft_1d_func func;
+   unsigned minimum_elements;
+   unsigned radix;
+   unsigned fixed_p;
+   unsigned minimum_p;
+   unsigned flags;
+};
+
+static const struct fft_step_1d fft_1d_table[] = {
+   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix8_p1_avx, .minimum_elements = 32, .radix = 8, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix4_p1_avx, .minimum_elements = 16, .radix = 4, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix2_p1_avx, .minimum_elements =  8, .radix = 2, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix2_p2_avx, .minimum_elements =  8, .radix = 2, .fixed_p = 2, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix8_generic_avx, .minimum_elements = 32, .radix = 8, .minimum_p = 8 },
+   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix4_generic_avx, .minimum_elements = 16, .radix = 4, .minimum_p = 4 },
+   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix2_generic_avx, .minimum_elements =  8, .radix = 2, .minimum_p = 4 },
+
+   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix8_p1_sse3, .minimum_elements = 16, .radix = 8, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix4_p1_sse3, .minimum_elements =  8, .radix = 4, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix2_p1_sse3, .minimum_elements =  4, .radix = 2, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix2_p2_sse3, .minimum_elements =  4, .radix = 2, .fixed_p = 2, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix8_generic_sse3, .minimum_elements = 16, .radix = 8, .minimum_p = 8 },
+   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix4_generic_sse3, .minimum_elements =  8, .radix = 4, .minimum_p = 4 },
+   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix2_generic_sse3, .minimum_elements =  4, .radix = 2, .minimum_p = 4 },
+
+   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix8_p1_sse, .minimum_elements = 16, .radix = 8, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix4_p1_sse, .minimum_elements =  8, .radix = 4, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix2_p1_sse, .minimum_elements =  4, .radix = 2, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix2_p2_sse, .minimum_elements =  4, .radix = 2, .fixed_p = 2, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix8_generic_sse, .minimum_elements = 32, .radix = 8, .minimum_p = 8 },
+   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix4_generic_sse, .minimum_elements = 16, .radix = 4, .minimum_p = 4 },
+   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix2_generic_sse, .minimum_elements =  8, .radix = 2, .minimum_p = 4 },
+
+   { .flags = MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix8_p1_c, .minimum_elements = 8, .radix = 8, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix4_p1_c, .minimum_elements = 4, .radix = 4, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix2_p1_c, .minimum_elements = 2, .radix = 2, .fixed_p = 1, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_DIRECTION_FORWARD,
+      .func = mufft_forward_radix2_p2_c, .minimum_elements = 2, .radix = 2, .fixed_p = 2, .minimum_p = -1u },
+   { .flags = MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix8_generic_c, .minimum_elements = 8, .radix = 8, .minimum_p = 8 },
+   { .flags = MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix4_generic_c, .minimum_elements = 4, .radix = 4, .minimum_p = 4 },
+   { .flags = MUFFT_FLAG_DIRECTION_ANY,
+      .func = mufft_radix2_generic_c, .minimum_elements = 2, .radix = 2, .minimum_p = 4 },
+};
+
+static bool add_step_1d(mufft_plan_1d *plan, const struct fft_step_1d *step, unsigned p)
 {
    struct mufft_step_1d *new_steps = realloc(plan->steps, (plan->num_steps + 1) * sizeof(*new_steps));
    if (new_steps != NULL)
    {
       plan->steps = new_steps;
+      plan->steps[plan->num_steps] = (struct mufft_step_1d) {
+         .func = step->func,
+         .radix = step->radix,
+         .p = p,
+      };
       plan->num_steps++;
       return true;
    }
@@ -72,15 +149,14 @@ static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction)
       bool found = false;
 
       // Find first (optimal?) routine which can do work.
-      for (unsigned i = 0; i < ARRAY_SIZE(fft_table); i++)
+      for (unsigned i = 0; i < ARRAY_SIZE(fft_1d_table); i++)
       {
-         const fft_step *step = &fft_table[i];
-
-         bool need_specialized = p < 4;
+         const struct fft_step_1d *step = &fft_1d_table[i];
 
          if (radix % step->radix == 0 &&
                N >= step->minimum_elements &&
-               (!need_specialized || step->fixed_p == p))
+               // TODO: Test for CPU flags!
+               (p >= step->minimum_p || p == step->fixed_p))
          {
             if (add_step_1d(plan, step, p))
             {
