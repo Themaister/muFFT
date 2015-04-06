@@ -75,11 +75,15 @@ else ifneq ($(findstring i686,$(ARCH)),)
    PLATFORM_ARCH := x86
 endif
 
+CFLAGS += $(PLATFORM_DEFINES)
+
 OBJDIR_SHARED := obj-shared/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)
 OBJDIR_STATIC := obj-static/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)
 TARGET_OUT_SHARED := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/$(TARGET_SHARED)
 TARGET_OUT_STATIC := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/$(TARGET_STATIC)
+TARGET_TEST := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/mufft_test$(EXE_SUFFIX)
 SOURCES := fft.c kernel.c
+SOURCES_TEST := test.c
 
 OBJECTS_SHARED := \
 	$(addprefix $(OBJDIR_SHARED)/,$(SOURCES:.c=.o)) \
@@ -89,7 +93,10 @@ OBJECTS_STATIC := \
 	$(addprefix $(OBJDIR_STATIC)/,$(SOURCES:.c=.o)) \
 	$(addprefix $(OBJDIR_STATIC)/,$(PLATFORM_SOURCES:.c=.o))
 
-DEPS := $(OBJECTS:.o=.d)
+OBJECTS_TEST := \
+	$(addprefix $(OBJDIR_STATIC)/,$(SOURCES_TEST:.c=.o))
+
+DEPS := $(OBJECTS_SHARED:.o=.d) $(OBJECTS_STATIC:.o=.d) $(OBJECTS_TEST:.o=.d)
 
 all: static shared
 
@@ -97,7 +104,13 @@ static: $(TARGET_OUT_STATIC)
 
 shared: $(TARGET_OUT_SHARED)
 
+test: $(TARGET_TEST)
+
 -include $(DEPS)
+
+$(TARGET_TEST): static $(OBJECTS_TEST)
+	@mkdir -p $(dir $@)
+	$(CC) -o $@ $(OBJECTS_TEST) $(TARGET_OUT_STATIC) $(shell pkg-config fftw3f --libs) $(LDFLAGS) 
 
 $(TARGET_OUT_SHARED): $(OBJECTS_SHARED)
 	@mkdir -p $(dir $@)
@@ -140,11 +153,11 @@ $(OBJDIR_STATIC)/%.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD
 
 clean:
-	rm -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC)
+	rm -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC) $(TARGET_TEST)
 	rm -rf $(OBJDIR_SHARED) $(OBJDIR_STATIC)
 
 clean-all:
 	rm -rf bin obj-shared obj-static
 
-.PHONY: all shared static clean clean-all
+.PHONY: all test shared static clean clean-all
 

@@ -89,9 +89,15 @@ static const struct fft_step_1d fft_1d_table[] = {
     { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
         .func = mufft_radix2_generic_ ## ext, .minimum_elements = 2 * min_x, .radix = 2, .minimum_p = 4 }
 
+#ifdef MUFFT_HAVE_AVX
     STAMP_CPU_1D(MUFFT_FLAG_CPU_AVX, avx, 4),
+#endif
+#ifdef MUFFT_HAVE_SSE3
     STAMP_CPU_1D(MUFFT_FLAG_CPU_SSE3, sse3, 2),
+#endif
+#ifdef MUFFT_HAVE_SSE
     STAMP_CPU_1D(MUFFT_FLAG_CPU_SSE, sse, 2),
+#endif
     STAMP_CPU_1D(0, c, 1),
 };
 
@@ -110,9 +116,15 @@ static const struct fft_step_2d fft_2d_table[] = {
     { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
         .func = mufft_radix2_generic_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 2, .radix = 2, .minimum_p = 4 }
 
+#ifdef MUFFT_HAVE_AVX
     STAMP_CPU_2D(MUFFT_FLAG_CPU_AVX, avx, 4),
+#endif
+#ifdef MUFFT_HAVE_SSE3
     STAMP_CPU_2D(MUFFT_FLAG_CPU_SSE3, sse3, 2),
+#endif
+#ifdef MUFFT_HAVE_SSE
     STAMP_CPU_2D(MUFFT_FLAG_CPU_SSE, sse, 2),
+#endif
     STAMP_CPU_2D(0, c, 1),
 };
 
@@ -127,6 +139,12 @@ static bool add_step_1d(mufft_plan_1d *plan, const struct fft_step_1d *step, uns
             struct mufft_step_1d prev = plan->steps[plan->num_steps - 1];
             twiddle_offset = prev.twiddle_offset +
                 (prev.p == 2 ? 3 : (prev.p * (prev.radix - 1)));
+
+            // We skipped radix2 kernels, we have to add the padding twiddle here.
+            if (p >= 4 && prev.p == 1)
+            {
+                twiddle_offset++;
+            }
         }
 
         plan->steps = new_steps;
@@ -243,7 +261,7 @@ void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
     unsigned N = plan->N;
 
     // We want final step to write to output.
-    if ((plan->num_steps & 1) != 0)
+    if ((plan->num_steps & 1) == 1)
     {
         SWAP(out, in);
     }
@@ -253,9 +271,9 @@ void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
 
     for (unsigned i = 1; i < plan->num_steps; i++)
     {
-        SWAP(out, in);
         const struct mufft_step_1d *step = &plan->steps[i];
         step->func(out, in, pt + step->twiddle_offset, step->p, N);
+        SWAP(out, in);
     }
 }
 
