@@ -33,7 +33,7 @@ static void test_fft_1d(unsigned N, int direction, unsigned flags)
     fftwf_execute(plan);
     mufft_execute_plan_1d(muplan, output, input);
 
-    const float epsilon = 0.000001f * N;
+    const float epsilon = 0.0000001f * N;
     for (unsigned i = 0; i < N; i++)
     {
         complex float delta = cabsf(output[i] - output_fftw[i]);
@@ -51,7 +51,7 @@ static void test_fft_1d(unsigned N, int direction, unsigned flags)
 
 int main(void)
 {
-    for (unsigned N = 2; N < 16 * 1024; N <<= 1)
+    for (unsigned N = 2; N < 128 * 1024; N <<= 1)
     {
         for (unsigned flags = 0; flags < 8; flags++)
         {
