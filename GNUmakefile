@@ -1,4 +1,3 @@
-
 ifeq ($(PLATFORM),)
    PLATFORM = unix
    ifeq ($(shell uname -a),)
@@ -88,8 +87,10 @@ OBJDIR_STATIC := obj-static/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)
 TARGET_OUT_SHARED := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/$(TARGET_SHARED)
 TARGET_OUT_STATIC := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/$(TARGET_STATIC)
 TARGET_TEST := mufft_test$(EXE_SUFFIX)
+TARGET_BENCH := mufft_bench$(EXE_SUFFIX)
 SOURCES := fft.c kernel.c
 SOURCES_TEST := test.c
+SOURCES_BENCH := bench.c
 
 OBJECTS_SHARED := \
 	$(addprefix $(OBJDIR_SHARED)/,$(SOURCES:.c=.o)) \
@@ -102,6 +103,9 @@ OBJECTS_STATIC := \
 OBJECTS_TEST := \
 	$(addprefix $(OBJDIR_STATIC)/,$(SOURCES_TEST:.c=.o))
 
+OBJECTS_BENCH := \
+	$(addprefix $(OBJDIR_STATIC)/,$(SOURCES_BENCH:.c=.o))
+
 DEPS := $(OBJECTS_SHARED:.o=.d) $(OBJECTS_STATIC:.o=.d) $(OBJECTS_TEST:.o=.d)
 
 all: static shared
@@ -112,10 +116,15 @@ shared: $(TARGET_OUT_SHARED)
 
 test: $(TARGET_TEST)
 
+bench: $(TARGET_BENCH)
+
 -include $(DEPS)
 
 $(TARGET_TEST): static $(OBJECTS_TEST)
-	$(CC) -o $@ $(OBJECTS_TEST) $(TARGET_OUT_STATIC) $(shell pkg-config fftw3f --libs) $(LDFLAGS) 
+	$(CC) -o $@ $(OBJECTS_TEST) $(TARGET_OUT_STATIC) $(shell pkg-config fftw3f --libs) $(LDFLAGS)
+
+$(TARGET_BENCH): static $(OBJECTS_BENCH)
+	$(CC) -o $@ $(OBJECTS_BENCH) $(TARGET_OUT_STATIC) $(shell pkg-config fftw3f --libs) $(LDFLAGS)
 
 $(TARGET_OUT_SHARED): $(OBJECTS_SHARED)
 	@mkdir -p $(dir $@)
@@ -158,11 +167,11 @@ $(OBJDIR_STATIC)/%.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD
 
 clean:
-	rm -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC) $(TARGET_TEST)
+	rm -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC) $(TARGET_TEST) $(TARGET_BENCH)
 	rm -rf $(OBJDIR_SHARED) $(OBJDIR_STATIC)
 
 clean-all:
 	rm -rf bin obj-shared obj-static
 
-.PHONY: all test shared static clean clean-all
+.PHONY: all test shared static clean clean-all bench
 
