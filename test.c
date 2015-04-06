@@ -7,7 +7,7 @@
 
 #include <fftw3.h> // Used as a reference.
 
-static void test_fft_1d(unsigned N, unsigned flags)
+static void test_fft_1d(unsigned N, int direction, unsigned flags)
 {
     complex float *input = mufft_alloc(N * sizeof(complex float));
     complex float *output = mufft_alloc(N * sizeof(complex float));
@@ -24,10 +24,10 @@ static void test_fft_1d(unsigned N, unsigned flags)
     memcpy(input_fftw, input, N * sizeof(complex float));
 
     fftwf_plan plan = fftwf_plan_dft_1d(N, input_fftw, output_fftw,
-            FFTW_FORWARD, FFTW_ESTIMATE);
+            direction, FFTW_ESTIMATE);
     assert(plan != NULL);
 
-    mufft_plan_1d *muplan = mufft_create_plan_1d_c2c(N, MUFFT_FORWARD, flags);
+    mufft_plan_1d *muplan = mufft_create_plan_1d_c2c(N, direction, flags);
     assert(muplan != NULL);
 
     fftwf_execute(plan);
@@ -55,7 +55,8 @@ int main(void)
     {
         for (unsigned flags = 0; flags < 8; flags++)
         {
-            test_fft_1d(N, flags);
+            test_fft_1d(N, -1, flags);
+            test_fft_1d(N, +1, flags);
         }
     }
 }
