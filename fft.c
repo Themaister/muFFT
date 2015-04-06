@@ -9,12 +9,14 @@ struct mufft_step_1d
    mufft_1d_func func;
    unsigned radix;
    unsigned p;
+   unsigned twiddle_offset;
 };
 
 struct mufft_plan_1d
 {
    struct mufft_step_1d *steps;
    unsigned num_steps;
+   unsigned N;
 
    cfloat *tmp_buffer;
    cfloat *twiddles;
@@ -118,11 +120,20 @@ static bool add_step_1d(mufft_plan_1d *plan, const struct fft_step_1d *step, uns
    struct mufft_step_1d *new_steps = realloc(plan->steps, (plan->num_steps + 1) * sizeof(*new_steps));
    if (new_steps != NULL)
    {
+      unsigned twiddle_offset = 0;
+      if (plan->num_steps != 0)
+      {
+         struct mufft_step_1d prev = plan->steps[plan->num_steps - 1];
+         twiddle_offset = prev.twiddle_offset +
+            (prev.p == 2 ? 3 : (prev.p * (prev.radix - 1)));
+      }
+
       plan->steps = new_steps;
       plan->steps[plan->num_steps] = (struct mufft_step_1d) {
          .func = step->func,
          .radix = step->radix,
          .p = p,
+         .twiddle_offset = twiddle_offset,
       };
       plan->num_steps++;
       return true;
@@ -138,6 +149,20 @@ static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction)
    unsigned radix = N;
    unsigned p = 1;
 
+   unsigned flags = 0;
+   switch (direction)
+   {
+      case MUFFT_FORWARD:
+         flags |= MUFFT_FLAG_DIRECTION_FORWARD;
+         break;
+
+      case MUFFT_INVERSE:
+         flags |= MUFFT_FLAG_DIRECTION_INVERSE;
+         break;
+   }
+   // Add CPU flags. Just accept any CPU for now.
+   flags |= MUFFT_FLAG_MASK_CPU;
+
    while (radix > 1)
    {
       bool found = false;
@@ -149,7 +174,7 @@ static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction)
 
          if (radix % step->radix == 0 &&
                N >= step->minimum_elements &&
-               // TODO: Test for CPU flags!
+               (flags & step->flags) == step->flags &&
                (p >= step->minimum_p || p == step->fixed_p))
          {
             if (add_step_1d(plan, step, p))
@@ -201,6 +226,7 @@ mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction)
       goto error;
    }
 
+   plan->N = N;
    return plan;
 
 error:
@@ -210,6 +236,26 @@ error:
 
 void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
 {
+   const cfloat *pt = plan->twiddles;
+   cfloat *out = output;
+   cfloat *in = plan->tmp_buffer;
+   unsigned N = plan->N;
+
+   // We want final step to write to output.
+   if ((plan->num_steps & 1) != 0)
+   {
+      SWAP(out, in);
+   }
+
+   const struct mufft_step_1d *first_step = &plan->steps[0];
+   first_step->func(in, input, pt, 1, N);
+
+   for (unsigned i = 1; i < plan->num_steps; i++)
+   {
+      SWAP(out, in);
+      const struct mufft_step_1d *step = &plan->steps[i];
+      step->func(out, in, pt + step->twiddle_offset, step->p, N);
+   }
 }
 
 void mufft_free_plan_1d(mufft_plan_1d *plan)
