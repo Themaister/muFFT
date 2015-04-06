@@ -78,7 +78,7 @@ static inline MM cmul_ps(MM a, MM b)
     return addsub_ps(R0, R1);
 }
 
-void MANGLE(mufft_forward_radix2_p1)(void *output_, const void *input_,
+void MANGLE(mufft_radix2_p1)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
@@ -110,38 +110,45 @@ void MANGLE(mufft_forward_radix2_p1)(void *output_, const void *input_,
     }
 }
 
-void MANGLE(mufft_forward_radix2_p2)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
-{
-    cfloat *output = output_;
-    const cfloat *input = input_;
-    (void)twiddles;
-    (void)p;
-
-    unsigned half_samples = samples >> 1;
-    const MM flip_signs = splat_const_dual_complex(0.0f, 0.0f, 0.0f, -0.0f);
-
-    for (unsigned i = 0; i < half_samples; i += VSIZE)
-    {
-        MM a = load_ps(&input[i]);
-        MM b = load_ps(&input[i + half_samples]);
-        b = xor_ps(permute_ps(b, _MM_SHUFFLE(2, 3, 1, 0)), flip_signs);
-
-        MM r0 = add_ps(a, b);
-        MM r1 = sub_ps(a, b);
 #if VSIZE == 4
-        a = _mm256_permute2f128_ps(r0, r1, (2 << 4) | (0 << 0));
-        b = _mm256_permute2f128_ps(r0, r1, (3 << 4) | (1 << 0));
+#define RADIX2_P2_END \
+    a = _mm256_permute2f128_ps(r0, r1, (2 << 4) | (0 << 0)); \
+    b = _mm256_permute2f128_ps(r0, r1, (3 << 4) | (1 << 0))
 #else
-        a = r0;
-        b = r1;
+#define RADIX2_P2_END \
+    a = r0; \
+    b = r1
 #endif
 
-        unsigned j = i << 1;
-        store_ps(&output[j + 0], a);
-        store_ps(&output[j + VSIZE], b);
-    }
+#define RADIX2_P2(direction, twiddle_r, twiddle_i) \
+void MANGLE(mufft_ ## direction ## _radix2_p2)(void *output_, const void *input_, \
+        const cfloat *twiddles, unsigned p, unsigned samples) \
+{ \
+    cfloat *output = output_; \
+    const cfloat *input = input_; \
+    (void)twiddles; \
+    (void)p; \
+ \
+    unsigned half_samples = samples >> 1; \
+    const MM flip_signs = splat_const_dual_complex(0.0f, 0.0f, twiddle_r, twiddle_i); \
+ \
+    for (unsigned i = 0; i < half_samples; i += VSIZE) \
+    { \
+        MM a = load_ps(&input[i]); \
+        MM b = load_ps(&input[i + half_samples]); \
+        b = xor_ps(permute_ps(b, _MM_SHUFFLE(2, 3, 1, 0)), flip_signs); \
+ \
+        MM r0 = add_ps(a, b); \
+        MM r1 = sub_ps(a, b); \
+        RADIX2_P2_END; \
+ \
+        unsigned j = i << 1; \
+        store_ps(&output[j + 0], a); \
+        store_ps(&output[j + VSIZE], b); \
+    } \
 }
+RADIX2_P2(forward, 0.0f, -0.0f)
+RADIX2_P2(inverse, -0.0f, 0.0f)
 
 void MANGLE(mufft_radix2_generic)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
@@ -169,59 +176,65 @@ void MANGLE(mufft_radix2_generic)(void *output_, const void *input_,
     }
 }
 
-void MANGLE(mufft_forward_radix4_p1)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
-{
-    cfloat *output = output_;
-    const cfloat *input = input_;
-    (void)twiddles;
-    (void)p;
-
-    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
-    unsigned quarter_samples = samples >> 2;
-
-    for (unsigned i = 0; i < quarter_samples; i += VSIZE)
-    {
-        MM a = load_ps(&input[i]);
-        MM b = load_ps(&input[i + quarter_samples]);
-        MM c = load_ps(&input[i + 2 * quarter_samples]);
-        MM d = load_ps(&input[i + 3 * quarter_samples]);
-
-        MM r0 = add_ps(a, c);
-        MM r1 = sub_ps(a, c);
-        MM r2 = add_ps(b, d);
-        MM r3 = sub_ps(b, d);
-        r3 = xor_ps(permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
-
-        MM o0 = add_ps(r0, r2);
-        MM o1 = add_ps(r1, r3);
-        MM o2 = sub_ps(r0, r2);
-        MM o3 = sub_ps(r1, r3);
-
-        // Transpose
-        MM o0o1_lo = unpacklo_pd(o0, o1);
-        MM o0o1_hi = unpackhi_pd(o0, o1);
-        MM o2o3_lo = unpacklo_pd(o2, o3);
-        MM o2o3_hi = unpackhi_pd(o2, o3);
 #if VSIZE == 4
-        o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0));
-        o1 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0));
-        o2 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0));
-        o3 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0));
+#define RADIX4_P1_END \
+    o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0)); \
+    o1 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0)); \
+    o2 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0)); \
+    o3 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0))
 #else
-        o0 = o0o1_lo;
-        o1 = o2o3_lo;
-        o2 = o0o1_hi;
-        o3 = o2o3_hi;
+#define RADIX4_P1_END \
+    o0 = o0o1_lo; \
+    o1 = o2o3_lo; \
+    o2 = o0o1_hi; \
+    o3 = o2o3_hi
 #endif
 
-        unsigned j = i << 2;
-        store_ps(&output[j + 0 * VSIZE], o0);
-        store_ps(&output[j + 1 * VSIZE], o1);
-        store_ps(&output[j + 2 * VSIZE], o2);
-        store_ps(&output[j + 3 * VSIZE], o3);
-    }
+#define RADIX4_P1(direction, twiddle_r, twiddle_i) \
+void MANGLE(mufft_ ## direction ## _radix4_p1)(void *output_, const void *input_, \
+        const cfloat *twiddles, unsigned p, unsigned samples) \
+{ \
+    cfloat *output = output_; \
+    const cfloat *input = input_; \
+    (void)twiddles; \
+    (void)p; \
+ \
+    const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
+    unsigned quarter_samples = samples >> 2; \
+ \
+    for (unsigned i = 0; i < quarter_samples; i += VSIZE) \
+    { \
+        MM a = load_ps(&input[i]); \
+        MM b = load_ps(&input[i + quarter_samples]); \
+        MM c = load_ps(&input[i + 2 * quarter_samples]); \
+        MM d = load_ps(&input[i + 3 * quarter_samples]); \
+ \
+        MM r0 = add_ps(a, c); \
+        MM r1 = sub_ps(a, c); \
+        MM r2 = add_ps(b, d); \
+        MM r3 = sub_ps(b, d); \
+        r3 = xor_ps(permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
+ \
+        MM o0 = add_ps(r0, r2); \
+        MM o1 = add_ps(r1, r3); \
+        MM o2 = sub_ps(r0, r2); \
+        MM o3 = sub_ps(r1, r3); \
+ \
+        MM o0o1_lo = unpacklo_pd(o0, o1); \
+        MM o0o1_hi = unpackhi_pd(o0, o1); \
+        MM o2o3_lo = unpacklo_pd(o2, o3); \
+        MM o2o3_hi = unpackhi_pd(o2, o3); \
+        RADIX4_P1_END; \
+ \
+        unsigned j = i << 2; \
+        store_ps(&output[j + 0 * VSIZE], o0); \
+        store_ps(&output[j + 1 * VSIZE], o1); \
+        store_ps(&output[j + 2 * VSIZE], o2); \
+        store_ps(&output[j + 3 * VSIZE], o3); \
+    } \
 }
+RADIX4_P1(forward, 0.0f, -0.0f)
+RADIX4_P1(inverse, -0.0f, 0.0f)
 
 void MANGLE(mufft_radix4_generic)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
@@ -268,103 +281,109 @@ void MANGLE(mufft_radix4_generic)(void *output_, const void *input_,
     }
 }
 
-void MANGLE(mufft_forward_radix8_p1)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
-{
-    cfloat *output = output_;
-    const cfloat *input = input_;
-    (void)twiddles;
-    (void)p;
-
-    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
-    const MM w_f = splat_const_complex(+M_SQRT_2, -M_SQRT_2);
-    const MM w_h = splat_const_complex(-M_SQRT_2, -M_SQRT_2);
-
-    unsigned octa_samples = samples >> 3;
-    for (unsigned i = 0; i < octa_samples; i += VSIZE)
-    {
-        MM a = load_ps(&input[i]);
-        MM b = load_ps(&input[i + octa_samples]);
-        MM c = load_ps(&input[i + 2 * octa_samples]);
-        MM d = load_ps(&input[i + 3 * octa_samples]);
-        MM e = load_ps(&input[i + 4 * octa_samples]);
-        MM f = load_ps(&input[i + 5 * octa_samples]);
-        MM g = load_ps(&input[i + 6 * octa_samples]);
-        MM h = load_ps(&input[i + 7 * octa_samples]);
-
-        MM r0 = add_ps(a, e);
-        MM r1 = sub_ps(a, e);
-        MM r2 = add_ps(b, f);
-        MM r3 = sub_ps(b, f);
-        MM r4 = add_ps(c, g);
-        MM r5 = sub_ps(c, g);
-        MM r6 = add_ps(d, h);
-        MM r7 = sub_ps(d, h);
-        r5 = xor_ps(permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
-        r7 = xor_ps(permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
-
-        a = add_ps(r0, r4);
-        b = add_ps(r1, r5);
-        c = sub_ps(r0, r4);
-        d = sub_ps(r1, r5);
-        e = add_ps(r2, r6);
-        f = add_ps(r3, r7);
-        g = sub_ps(r2, r6);
-        h = sub_ps(r3, r7);
-
-        f = cmul_ps(f, w_f);
-        g = xor_ps(permute_ps(g, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); // -j
-        h = cmul_ps(h, w_h);
-
-        MM o0 = add_ps(a, e);
-        MM o1 = add_ps(b, f);
-        MM o2 = add_ps(c, g);
-        MM o3 = add_ps(d, h);
-        MM o4 = sub_ps(a, e);
-        MM o5 = sub_ps(b, f);
-        MM o6 = sub_ps(c, g);
-        MM o7 = sub_ps(d, h);
-
-        MM o0o1_lo = unpacklo_pd(o0, o1);
-        MM o0o1_hi = unpackhi_pd(o0, o1);
-        MM o2o3_lo = unpacklo_pd(o2, o3);
-        MM o2o3_hi = unpackhi_pd(o2, o3);
-        MM o4o5_lo = unpacklo_pd(o4, o5);
-        MM o4o5_hi = unpackhi_pd(o4, o5);
-        MM o6o7_lo = unpacklo_pd(o6, o7);
-        MM o6o7_hi = unpackhi_pd(o6, o7);
-
 #if VSIZE == 4
-        o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0));
-        o1 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (2 << 4) | (0 << 0));
-        o2 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0));
-        o3 = _mm256_permute2f128_ps(o4o5_hi, o6o7_hi, (2 << 4) | (0 << 0));
-        o4 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0));
-        o5 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (3 << 4) | (1 << 0));
-        o6 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0));
-        o7 = _mm256_permute2f128_ps(o4o5_hi, o6o7_hi, (3 << 4) | (1 << 0));
+#define RADIX8_P1_END \
+        o0 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (2 << 4) | (0 << 0)); \
+        o1 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (2 << 4) | (0 << 0)); \
+        o2 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (2 << 4) | (0 << 0)); \
+        o3 = _mm256_permute2f128_ps(o4o5_hi, o6o7_hi, (2 << 4) | (0 << 0)); \
+        o4 = _mm256_permute2f128_ps(o0o1_lo, o2o3_lo, (3 << 4) | (1 << 0)); \
+        o5 = _mm256_permute2f128_ps(o4o5_lo, o6o7_lo, (3 << 4) | (1 << 0)); \
+        o6 = _mm256_permute2f128_ps(o0o1_hi, o2o3_hi, (3 << 4) | (1 << 0)); \
+        o7 = _mm256_permute2f128_ps(o4o5_hi, o6o7_hi, (3 << 4) | (1 << 0))
 #else
-        o0 = o0o1_lo;
-        o1 = o2o3_lo;
-        o2 = o4o5_lo;
-        o3 = o6o7_lo;
-        o4 = o0o1_hi;
-        o5 = o2o3_hi;
-        o6 = o4o5_hi;
-        o7 = o6o7_hi;
+#define RADIX8_P1_END \
+        o0 = o0o1_lo; \
+        o1 = o2o3_lo; \
+        o2 = o4o5_lo; \
+        o3 = o6o7_lo; \
+        o4 = o0o1_hi; \
+        o5 = o2o3_hi; \
+        o6 = o4o5_hi; \
+        o7 = o6o7_hi
 #endif
 
-        unsigned j = i << 3;
-        store_ps(&output[j + 0 * VSIZE], o0);
-        store_ps(&output[j + 1 * VSIZE], o1);
-        store_ps(&output[j + 2 * VSIZE], o2);
-        store_ps(&output[j + 3 * VSIZE], o3);
-        store_ps(&output[j + 4 * VSIZE], o4);
-        store_ps(&output[j + 5 * VSIZE], o5);
-        store_ps(&output[j + 6 * VSIZE], o6);
-        store_ps(&output[j + 7 * VSIZE], o7);
-    }
+#define RADIX8_P1(direction, twiddle_r, twiddle_i, twiddle8) \
+void MANGLE(mufft_ ## direction ## _radix8_p1)(void *output_, const void *input_, \
+        const cfloat *twiddles, unsigned p, unsigned samples) \
+{ \
+    cfloat *output = output_; \
+    const cfloat *input = input_; \
+    (void)twiddles; \
+    (void)p; \
+ \
+    const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
+    const MM w_f = splat_const_complex(+M_SQRT_2, twiddle8); \
+    const MM w_h = splat_const_complex(-M_SQRT_2, twiddle8); \
+ \
+    unsigned octa_samples = samples >> 3; \
+    for (unsigned i = 0; i < octa_samples; i += VSIZE) \
+    { \
+        MM a = load_ps(&input[i]); \
+        MM b = load_ps(&input[i + octa_samples]); \
+        MM c = load_ps(&input[i + 2 * octa_samples]); \
+        MM d = load_ps(&input[i + 3 * octa_samples]); \
+        MM e = load_ps(&input[i + 4 * octa_samples]); \
+        MM f = load_ps(&input[i + 5 * octa_samples]); \
+        MM g = load_ps(&input[i + 6 * octa_samples]); \
+        MM h = load_ps(&input[i + 7 * octa_samples]); \
+ \
+        MM r0 = add_ps(a, e); \
+        MM r1 = sub_ps(a, e); \
+        MM r2 = add_ps(b, f); \
+        MM r3 = sub_ps(b, f); \
+        MM r4 = add_ps(c, g); \
+        MM r5 = sub_ps(c, g); \
+        MM r6 = add_ps(d, h); \
+        MM r7 = sub_ps(d, h); \
+        r5 = xor_ps(permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
+        r7 = xor_ps(permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
+ \
+        a = add_ps(r0, r4); \
+        b = add_ps(r1, r5); \
+        c = sub_ps(r0, r4); \
+        d = sub_ps(r1, r5); \
+        e = add_ps(r2, r6); \
+        f = add_ps(r3, r7); \
+        g = sub_ps(r2, r6); \
+        h = sub_ps(r3, r7); \
+ \
+        f = cmul_ps(f, w_f); \
+        g = xor_ps(permute_ps(g, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
+        h = cmul_ps(h, w_h); \
+ \
+        MM o0 = add_ps(a, e); \
+        MM o1 = add_ps(b, f); \
+        MM o2 = add_ps(c, g); \
+        MM o3 = add_ps(d, h); \
+        MM o4 = sub_ps(a, e); \
+        MM o5 = sub_ps(b, f); \
+        MM o6 = sub_ps(c, g); \
+        MM o7 = sub_ps(d, h); \
+ \
+        MM o0o1_lo = unpacklo_pd(o0, o1); \
+        MM o0o1_hi = unpackhi_pd(o0, o1); \
+        MM o2o3_lo = unpacklo_pd(o2, o3); \
+        MM o2o3_hi = unpackhi_pd(o2, o3); \
+        MM o4o5_lo = unpacklo_pd(o4, o5); \
+        MM o4o5_hi = unpackhi_pd(o4, o5); \
+        MM o6o7_lo = unpacklo_pd(o6, o7); \
+        MM o6o7_hi = unpackhi_pd(o6, o7); \
+ \
+        RADIX8_P1_END; \
+        unsigned j = i << 3; \
+        store_ps(&output[j + 0 * VSIZE], o0); \
+        store_ps(&output[j + 1 * VSIZE], o1); \
+        store_ps(&output[j + 2 * VSIZE], o2); \
+        store_ps(&output[j + 3 * VSIZE], o3); \
+        store_ps(&output[j + 4 * VSIZE], o4); \
+        store_ps(&output[j + 5 * VSIZE], o5); \
+        store_ps(&output[j + 6 * VSIZE], o6); \
+        store_ps(&output[j + 7 * VSIZE], o7); \
+    } \
 }
+RADIX8_P1(forward, 0.0f, -0.0f, -M_SQRT_2)
+RADIX8_P1(inverse, -0.0f, +0.0f, +M_SQRT_2)
 
 void MANGLE(mufft_radix8_generic)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
@@ -507,46 +526,49 @@ void MANGLE(mufft_radix2_generic_vert)(void *output_, const void *input_,
     }
 }
 
-void MANGLE(mufft_forward_radix4_p1_vert)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
-{
-    cfloat *output = output_;
-    const cfloat *input = input_;
-    (void)twiddles;
-    (void)p;
-
-    unsigned quarter_stride = samples_x * (samples_x >> 2);
-    unsigned quarter_lines = samples_y >> 2;
-    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
-
-    for (unsigned line = 0; line < quarter_lines;
-            line++, input += samples_x, output += samples_x << 2)
-    {
-        for (unsigned i = 0; i < samples_x; i += VSIZE)
-        {
-            MM a = load_ps(&input[i]);
-            MM b = load_ps(&input[i + quarter_stride]);
-            MM c = load_ps(&input[i + 2 * quarter_stride]);
-            MM d = load_ps(&input[i + 3 * quarter_stride]);
-
-            MM r0 = add_ps(a, c);
-            MM r1 = sub_ps(a, c);
-            MM r2 = add_ps(b, d);
-            MM r3 = sub_ps(b, d);
-            r3 = xor_ps(permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
-
-            a = add_ps(r0, r2);
-            b = add_ps(r1, r3);
-            c = sub_ps(r0, r2);
-            d = sub_ps(r1, r3);
-
-            store_ps(&output[i], a);
-            store_ps(&output[i + 1 * samples_x], b);
-            store_ps(&output[i + 2 * samples_x], c);
-            store_ps(&output[i + 3 * samples_x], d);
-        }
-    }
+#define RADIX4_P1_VERT(direction, twiddle_r, twiddle_i) \
+void MANGLE(mufft_ ## direction ## _radix4_p1_vert)(void *output_, const void *input_, \
+        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y) \
+{ \
+    cfloat *output = output_; \
+    const cfloat *input = input_; \
+    (void)twiddles; \
+    (void)p; \
+ \
+    unsigned quarter_stride = samples_x * (samples_x >> 2); \
+    unsigned quarter_lines = samples_y >> 2; \
+    const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
+ \
+    for (unsigned line = 0; line < quarter_lines; \
+            line++, input += samples_x, output += samples_x << 2) \
+    { \
+        for (unsigned i = 0; i < samples_x; i += VSIZE) \
+        { \
+            MM a = load_ps(&input[i]); \
+            MM b = load_ps(&input[i + quarter_stride]); \
+            MM c = load_ps(&input[i + 2 * quarter_stride]); \
+            MM d = load_ps(&input[i + 3 * quarter_stride]); \
+ \
+            MM r0 = add_ps(a, c); \
+            MM r1 = sub_ps(a, c); \
+            MM r2 = add_ps(b, d); \
+            MM r3 = sub_ps(b, d); \
+            r3 = xor_ps(permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
+ \
+            a = add_ps(r0, r2); \
+            b = add_ps(r1, r3); \
+            c = sub_ps(r0, r2); \
+            d = sub_ps(r1, r3); \
+ \
+            store_ps(&output[i], a); \
+            store_ps(&output[i + 1 * samples_x], b); \
+            store_ps(&output[i + 2 * samples_x], c); \
+            store_ps(&output[i + 3 * samples_x], d); \
+        } \
+    } \
 }
+RADIX4_P1_VERT(forward, 0.0f, -0.0f)
+RADIX4_P1_VERT(inverse, -0.0f, 0.0f)
 
 void MANGLE(mufft_radix4_generic_vert)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
@@ -594,74 +616,80 @@ void MANGLE(mufft_radix4_generic_vert)(void *output_, const void *input_,
     }
 }
 
-void MANGLE(mufft_forward_radix8_p1_vert)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
-{
-    cfloat *output = output_;
-    const cfloat *input = input_;
-    (void)p;
-
-    unsigned octa_stride = samples_x * (samples_x >> 3);
-    unsigned octa_lines = samples_y >> 3;
-    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
-
-    for (unsigned line = 0; line < octa_lines;
-            line++, input += samples_x, output += samples_x << 3)
-    {
-        for (unsigned i = 0; i < samples_x; i += VSIZE)
-        {
-            MM a = load_ps(&input[i]);
-            MM b = load_ps(&input[i + octa_stride]);
-            MM c = load_ps(&input[i + 2 * octa_stride]);
-            MM d = load_ps(&input[i + 3 * octa_stride]);
-            MM e = load_ps(&input[i + 4 * octa_stride]);
-            MM f = load_ps(&input[i + 5 * octa_stride]);
-            MM g = load_ps(&input[i + 6 * octa_stride]);
-            MM h = load_ps(&input[i + 7 * octa_stride]);
-
-            MM r0 = add_ps(a, e);
-            MM r1 = sub_ps(a, e);
-            MM r2 = add_ps(b, f);
-            MM r3 = sub_ps(b, f);
-            MM r4 = add_ps(c, g);
-            MM r5 = sub_ps(c, g);
-            MM r6 = add_ps(d, h);
-            MM r7 = sub_ps(d, h);
-            r5 = xor_ps(permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
-            r7 = xor_ps(permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs);
-
-            a = add_ps(r0, r4);
-            b = add_ps(r1, r5);
-            c = sub_ps(r0, r4);
-            d = sub_ps(r1, r5);
-            e = add_ps(r2, r6);
-            f = add_ps(r3, r7);
-            g = sub_ps(r2, r6);
-            h = sub_ps(r3, r7);
-            f = cmul_ps(f, splat_complex(&twiddles[5]));
-            g = cmul_ps(g, splat_complex(&twiddles[6]));
-            h = cmul_ps(h, splat_complex(&twiddles[7]));
-
-            r0 = add_ps(a, e);
-            r1 = add_ps(b, f);
-            r2 = add_ps(c, g);
-            r3 = add_ps(d, h);
-            r4 = sub_ps(a, e);
-            r5 = sub_ps(b, f);
-            r6 = sub_ps(c, g);
-            r7 = sub_ps(d, h);
-
-            store_ps(&output[i], r0);
-            store_ps(&output[i + 1 * samples_x], r1);
-            store_ps(&output[i + 2 * samples_x], r2);
-            store_ps(&output[i + 3 * samples_x], r3);
-            store_ps(&output[i + 4 * samples_x], r4);
-            store_ps(&output[i + 5 * samples_x], r5);
-            store_ps(&output[i + 6 * samples_x], r6);
-            store_ps(&output[i + 7 * samples_x], r7);
-        }
-    }
+#define RADIX8_P1_VERT(direction, twiddle_r, twiddle_i, twiddle8) \
+void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void *output_, const void *input_, \
+        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y) \
+{ \
+    cfloat *output = output_; \
+    const cfloat *input = input_; \
+    (void)p; \
+    (void)twiddles; \
+ \
+    unsigned octa_stride = samples_x * (samples_x >> 3); \
+    unsigned octa_lines = samples_y >> 3; \
+    const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
+    const MM w_f = splat_const_complex(+M_SQRT_2, twiddle8); \
+    const MM w_h = splat_const_complex(-M_SQRT_2, twiddle8); \
+ \
+    for (unsigned line = 0; line < octa_lines; \
+            line++, input += samples_x, output += samples_x << 3) \
+    { \
+        for (unsigned i = 0; i < samples_x; i += VSIZE) \
+        { \
+            MM a = load_ps(&input[i]); \
+            MM b = load_ps(&input[i + octa_stride]); \
+            MM c = load_ps(&input[i + 2 * octa_stride]); \
+            MM d = load_ps(&input[i + 3 * octa_stride]); \
+            MM e = load_ps(&input[i + 4 * octa_stride]); \
+            MM f = load_ps(&input[i + 5 * octa_stride]); \
+            MM g = load_ps(&input[i + 6 * octa_stride]); \
+            MM h = load_ps(&input[i + 7 * octa_stride]); \
+ \
+            MM r0 = add_ps(a, e); \
+            MM r1 = sub_ps(a, e); \
+            MM r2 = add_ps(b, f); \
+            MM r3 = sub_ps(b, f); \
+            MM r4 = add_ps(c, g); \
+            MM r5 = sub_ps(c, g); \
+            MM r6 = add_ps(d, h); \
+            MM r7 = sub_ps(d, h); \
+            r5 = xor_ps(permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
+            r7 = xor_ps(permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
+ \
+            a = add_ps(r0, r4); \
+            b = add_ps(r1, r5); \
+            c = sub_ps(r0, r4); \
+            d = sub_ps(r1, r5); \
+            e = add_ps(r2, r6); \
+            f = add_ps(r3, r7); \
+            g = sub_ps(r2, r6); \
+            h = sub_ps(r3, r7); \
+            f = cmul_ps(f, w_f); \
+            g = xor_ps(permute_ps(g, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
+            h = cmul_ps(h, w_h); \
+ \
+            r0 = add_ps(a, e); \
+            r1 = add_ps(b, f); \
+            r2 = add_ps(c, g); \
+            r3 = add_ps(d, h); \
+            r4 = sub_ps(a, e); \
+            r5 = sub_ps(b, f); \
+            r6 = sub_ps(c, g); \
+            r7 = sub_ps(d, h); \
+ \
+            store_ps(&output[i], r0); \
+            store_ps(&output[i + 1 * samples_x], r1); \
+            store_ps(&output[i + 2 * samples_x], r2); \
+            store_ps(&output[i + 3 * samples_x], r3); \
+            store_ps(&output[i + 4 * samples_x], r4); \
+            store_ps(&output[i + 5 * samples_x], r5); \
+            store_ps(&output[i + 6 * samples_x], r6); \
+            store_ps(&output[i + 7 * samples_x], r7); \
+        } \
+    } \
 }
+RADIX8_P1_VERT(forward, 0.0f, -0.0f, -M_SQRT_2)
+RADIX8_P1_VERT(inverse, -0.0f, 0.0f, +M_SQRT_2)
 
 void MANGLE(mufft_radix8_generic_vert)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)

@@ -1,6 +1,6 @@
 #include "fft_internal.h"
 
-void mufft_forward_radix2_p1_c(void *output_, const void *input_,
+void mufft_radix2_p1_c(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
@@ -41,6 +41,12 @@ void mufft_forward_radix2_p2_c(void *output_, const void *input_,
     }
 }
 
+void mufft_inverse_radix2_p2_c(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples)
+{
+    mufft_forward_radix2_p2_c(output_, input_, twiddles, p, samples);
+}
+
 void mufft_radix2_generic_c(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
 {
@@ -59,7 +65,6 @@ void mufft_radix2_generic_c(void *output_, const void *input_,
         output[j + p] = a - b;
     }
 }
-
 
 void mufft_forward_radix4_p1_c(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
@@ -81,7 +86,7 @@ void mufft_forward_radix4_p1_c(void *output_, const void *input_,
         cfloat r1 = a - c;
         cfloat r2 = b + d;
         cfloat r3 = b - d;
-        r3 *= -I;
+        r3 *= twiddles[2];
 
         unsigned j = i << 2;
         output[j + 0] = r0 + r2;
@@ -89,6 +94,12 @@ void mufft_forward_radix4_p1_c(void *output_, const void *input_,
         output[j + 2] = r0 - r2;
         output[j + 3] = r1 - r3;
     }
+}
+
+void mufft_inverse_radix4_p1_c(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples)
+{
+    mufft_forward_radix4_p1_c(output_, input_, twiddles, p, samples);
 }
 
 void mufft_radix4_generic_c(void *output_, const void *input_,
@@ -160,8 +171,8 @@ void mufft_forward_radix8_p1_c(void *output_, const void *input_,
         cfloat r7 = d - h; // 6O + 1
 
         // p == 2 twiddles
-        r5 *= -I;
-        r7 *= -I;
+        r5 *= twiddles[2];
+        r7 *= twiddles[2];
 
         a = r0 + r4; // 0O + 0
         b = r1 + r5; // 0O + 1
@@ -188,6 +199,12 @@ void mufft_forward_radix8_p1_c(void *output_, const void *input_,
         output[j + 6] = c - g;
         output[j + 7] = d - h;
     }
+}
+
+void mufft_inverse_radix8_p1_c(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples)
+{
+    mufft_forward_radix8_p1_c(output_, input_, twiddles, p, samples);
 }
 
 void mufft_radix8_generic_c(void *output_, const void *input_,
@@ -335,7 +352,7 @@ void mufft_forward_radix4_p1_vert_c(void *output_, const void *input_,
             cfloat r3 = b - d; // 2O + 1
 
             // p == 2 twiddles
-            r3 *= -I;
+            r3 *= twiddles[2];
 
             a = r0 + r2; // 0O + 0
             b = r1 + r3; // 0O + 1
@@ -348,6 +365,12 @@ void mufft_forward_radix4_p1_vert_c(void *output_, const void *input_,
             output[i + 3 * samples_x] = d;
         }
     }
+}
+
+void mufft_inverse_radix4_p1_vert_c(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+{
+    mufft_forward_radix4_p1_vert_c(output_, input_, twiddles, p, samples_x, samples_y);
 }
 
 void mufft_radix4_generic_vert_c(void *output_, const void *input_,
@@ -427,8 +450,8 @@ void mufft_forward_radix8_p1_vert_c(void *output_, const void *input_,
             cfloat r7 = d - h; // 6O + 1
 
             // p == 2 twiddles
-            r5 *= -I;
-            r7 *= -I;
+            r5 *= twiddles[2];
+            r7 *= twiddles[2];
 
             a = r0 + r4; // 0O + 0
             b = r1 + r5; // 0O + 1
@@ -455,6 +478,12 @@ void mufft_forward_radix8_p1_vert_c(void *output_, const void *input_,
             output[i + 7 * samples_x] = d - h;
         }
     }
+}
+
+void mufft_inverse_radix8_p1_vert_c(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+{
+    mufft_forward_radix8_p1_vert_c(output_, input_, twiddles, p, samples_x, samples_y);
 }
 
 void mufft_radix8_generic_vert_c(void *output_, const void *input_,

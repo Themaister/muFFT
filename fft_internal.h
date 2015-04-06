@@ -31,16 +31,21 @@ typedef void (*mufft_2d_func)(void *output, const void *input,
 #define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
 #define DECLARE_FFT_CPU(arch) \
+    FFT_1D_FUNC(radix2_p1, arch) \
     FFT_1D_FUNC(forward_radix8_p1, arch) \
     FFT_1D_FUNC(forward_radix4_p1, arch) \
-    FFT_1D_FUNC(forward_radix2_p1, arch) \
     FFT_1D_FUNC(forward_radix2_p2, arch) \
+    FFT_1D_FUNC(inverse_radix8_p1, arch) \
+    FFT_1D_FUNC(inverse_radix4_p1, arch) \
+    FFT_1D_FUNC(inverse_radix2_p2, arch) \
     FFT_1D_FUNC(radix8_generic, arch) \
     FFT_1D_FUNC(radix4_generic, arch) \
     FFT_1D_FUNC(radix2_generic, arch) \
+    FFT_2D_FUNC(radix2_p1_vert, arch) \
     FFT_2D_FUNC(forward_radix8_p1_vert, arch) \
     FFT_2D_FUNC(forward_radix4_p1_vert, arch) \
-    FFT_2D_FUNC(forward_radix2_p1_vert, arch) \
+    FFT_2D_FUNC(inverse_radix8_p1_vert, arch) \
+    FFT_2D_FUNC(inverse_radix4_p1_vert, arch) \
     FFT_2D_FUNC(radix8_generic_vert, arch) \
     FFT_2D_FUNC(radix4_generic_vert, arch) \
     FFT_2D_FUNC(radix2_generic_vert, arch)
