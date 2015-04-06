@@ -267,7 +267,7 @@ void mufft_radix8_generic_c(void *output_, const void *input_,
     }
 }
 
-void mufft_forward_radix2_p1_vert_c(void *output_, const void *input_,
+void mufft_radix2_p1_vert_c(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;

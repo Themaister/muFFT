@@ -5,6 +5,14 @@
 #include <string.h>
 #include <stdint.h>
 
+struct mufft_step_base
+{
+    void (*func)(void);
+    unsigned radix;
+    unsigned p;
+    unsigned twiddle_offset;
+};
+
 struct mufft_step_1d
 {
     mufft_1d_func func;
@@ -72,11 +80,17 @@ static cfloat *build_twiddles(unsigned N, int direction)
     return twiddles;
 }
 
+struct fft_step_base
+{
+    void (*func)(void);
+    unsigned radix;
+};
+
 struct fft_step_1d
 {
     mufft_1d_func func;
-    unsigned minimum_elements;
     unsigned radix;
+    unsigned minimum_elements;
     unsigned fixed_p;
     unsigned minimum_p;
     unsigned flags;
@@ -85,9 +99,9 @@ struct fft_step_1d
 struct fft_step_2d
 {
     mufft_2d_func func;
+    unsigned radix;
     unsigned minimum_elements_x;
     unsigned minimum_elements_y;
-    unsigned radix;
     unsigned fixed_p;
     unsigned minimum_p;
     unsigned flags;
@@ -159,40 +173,38 @@ static const struct fft_step_2d fft_2d_table[] = {
     STAMP_CPU_2D(0, c, 1),
 };
 
-static bool add_step_1d(struct mufft_step_1d **steps, unsigned *num_steps,
-        const struct fft_step_1d *step, unsigned p)
+static bool add_step(struct mufft_step_base **steps, unsigned *num_steps,
+        const struct fft_step_base *step, unsigned p)
 {
-    struct mufft_step_1d *new_steps = realloc(*steps, (*num_steps + 1) * sizeof(*new_steps));
-    if (new_steps != NULL)
-    {
-        unsigned twiddle_offset = 0;
-        if (*num_steps != 0)
-        {
-            struct mufft_step_1d prev = (*steps)[*num_steps - 1];
-            twiddle_offset = prev.twiddle_offset +
-                (prev.p == 2 ? 3 : (prev.p * (prev.radix - 1)));
-
-            // We skipped radix2 kernels, we have to add the padding twiddle here.
-            if (p >= 4 && prev.p == 1)
-            {
-                twiddle_offset++;
-            }
-        }
-
-        *steps = new_steps;
-        (*steps)[*num_steps] = (struct mufft_step_1d) {
-            .func = step->func,
-                .radix = step->radix,
-                .p = p,
-                .twiddle_offset = twiddle_offset,
-        };
-        (*num_steps)++;
-        return true;
-    }
-    else
+    struct mufft_step_base *new_steps = realloc(*steps, (*num_steps + 1) * sizeof(*new_steps));
+    if (new_steps == NULL)
     {
         return false;
     }
+
+    unsigned twiddle_offset = 0;
+    if (*num_steps != 0)
+    {
+        struct mufft_step_base prev = (*steps)[*num_steps - 1];
+        twiddle_offset = prev.twiddle_offset +
+            (prev.p == 2 ? 3 : (prev.p * (prev.radix - 1)));
+
+        // We skipped radix2 kernels, we have to add the padding twiddle here.
+        if (p >= 4 && prev.p == 1)
+        {
+            twiddle_offset++;
+        }
+    }
+
+    *steps = new_steps;
+    (*steps)[*num_steps] = (struct mufft_step_base) {
+        .func = step->func,
+        .radix = step->radix,
+        .p = p,
+        .twiddle_offset = twiddle_offset,
+    };
+    (*num_steps)++;
+    return true;
 }
 
 static bool build_plan_1d(struct mufft_step_1d **steps, unsigned *num_steps, unsigned N, int direction, unsigned flags)
@@ -228,7 +240,8 @@ static bool build_plan_1d(struct mufft_step_1d **steps, unsigned *num_steps, uns
                     (step_flags & step->flags) == step->flags &&
                     (p >= step->minimum_p || p == step->fixed_p))
             {
-                if (add_step_1d(steps, num_steps, step, p))
+                // Ugly casting, but add_step_1d and add_step_2d are ABI-wise exactly the same, and we don't have templates :(
+                if (add_step((struct mufft_step_base**)steps, num_steps, (const struct fft_step_base*)step, p))
                 {
                     found = true;
                     radix /= step->radix;
@@ -246,6 +259,62 @@ static bool build_plan_1d(struct mufft_step_1d **steps, unsigned *num_steps, uns
 
     return true;
 }
+
+static bool build_plan_2d(struct mufft_step_2d **steps, unsigned *num_steps, unsigned Nx, unsigned Ny, int direction, unsigned flags)
+{
+    unsigned radix = Ny;
+    unsigned p = 1;
+
+    unsigned step_flags = 0;
+    switch (direction)
+    {
+        case MUFFT_FORWARD:
+            step_flags |= MUFFT_FLAG_DIRECTION_FORWARD;
+            break;
+
+        case MUFFT_INVERSE:
+            step_flags |= MUFFT_FLAG_DIRECTION_INVERSE;
+            break;
+    }
+    // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
+    step_flags |= MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+
+    while (radix > 1)
+    {
+        bool found = false;
+
+        // Find first (optimal?) routine which can do work.
+        for (unsigned i = 0; i < ARRAY_SIZE(fft_2d_table); i++)
+        {
+            const struct fft_step_2d *step = &fft_2d_table[i];
+
+            if (radix % step->radix == 0 &&
+                    Ny >= step->minimum_elements_y &&
+                    Nx >= step->minimum_elements_x &&
+                    (step_flags & step->flags) == step->flags &&
+                    (p >= step->minimum_p || p == step->fixed_p))
+            {
+                // Ugly casting, but add_step_1d and add_step_2d are ABI-wise exactly the same,
+                // and we don't have templates :(
+                if (add_step((struct mufft_step_base**)steps, num_steps, (const struct fft_step_base*)step, p))
+                {
+                    found = true;
+                    radix /= step->radix;
+                    p *= step->radix;
+                    break;
+                }
+            }
+        }
+
+        if (!found)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 
 mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags)
 {
@@ -312,6 +381,11 @@ mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction,
     }
 
     if (!build_plan_1d(&plan->steps_x, &plan->num_steps_x, Nx, direction, flags))
+    {
+        goto error;
+    }
+
+    if (!build_plan_2d(&plan->steps_y, &plan->num_steps_y, Nx, Ny, direction, flags))
     {
         goto error;
     }
