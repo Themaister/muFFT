@@ -14,18 +14,29 @@ endif
 
 ifeq ($(PLATFORM),win)
    CC = $(TOOLCHAIN_PREFIX)gcc
+   AR = $(TOOLCHAIN_PREFIX)ar
    EXE_SUFFIX := .exe
    SHARED := -shared
+   TARGET_SHARED := mufft.dll
+   TARGET_STATIC := libmufft.a
+else ifeq ($(PLATFORM),osx)
+   FPIC := -fPIC
+   SHARED := -dynamiclib
+   TARGET_SHARED := libmufft.dylib
+   TARGET_STATIC := libmufft.a
 else
    FPIC := -fPIC
    SHARED := -shared
+   TARGET_SHARED := libmufft.so
+   TARGET_STATIC := libmufft.a
 endif
 
-CFLAGS += -std=c99 -Wall -Wextra -pedantic $(FPIC) -D_POSIX_C_SOURCE=200112L
-LDFLAGS += -lm $(SHARED) -Wl,-no-undefined
+CFLAGS += -std=c99 -Wall -Wextra -pedantic -D_POSIX_C_SOURCE=200112L
+LDFLAGS += -lm -Wl,-no-undefined
 
 ifneq ($(TOOLCHAIN_PREFIX),)
    CC = $(TOOLCHAIN_PREFIX)gcc
+   AR = $(TOOLCHAIN_PREFIX)ar
 endif
 
 ifeq ($(ARCH),)
@@ -64,47 +75,76 @@ else ifneq ($(findstring i686,$(ARCH)),)
    PLATFORM_ARCH := x86
 endif
 
-TARGET_SHARED := libmufft.so
-OBJDIR := obj/$(PLATFORM_ARCH)/$(CONFIG)
-TARGET := bin/$(PLATFORM_ARCH)/$(CONFIG)/$(TARGET_SHARED)
+OBJDIR_SHARED := obj-shared/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)
+OBJDIR_STATIC := obj-static/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)
+TARGET_OUT_SHARED := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/$(TARGET_SHARED)
+TARGET_OUT_STATIC := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/$(TARGET_STATIC)
 SOURCES := fft.c kernel.c
 
-OBJECTS := \
-	$(addprefix $(OBJDIR)/,$(SOURCES:.c=.o)) \
-	$(addprefix $(OBJDIR)/,$(PLATFORM_SOURCES:.c=.o))
+OBJECTS_SHARED := \
+	$(addprefix $(OBJDIR_SHARED)/,$(SOURCES:.c=.o)) \
+	$(addprefix $(OBJDIR_SHARED)/,$(PLATFORM_SOURCES:.c=.o))
+
+OBJECTS_STATIC := \
+	$(addprefix $(OBJDIR_STATIC)/,$(SOURCES:.c=.o)) \
+	$(addprefix $(OBJDIR_STATIC)/,$(PLATFORM_SOURCES:.c=.o))
 
 DEPS := $(OBJECTS:.o=.d)
 
-all: $(TARGET)
+all: static shared
+
+static: $(TARGET_OUT_STATIC)
+
+shared: $(TARGET_OUT_SHARED)
 
 -include $(DEPS)
 
-$(TARGET): $(OBJECTS)
+$(TARGET_OUT_SHARED): $(OBJECTS_SHARED)
 	@mkdir -p $(dir $@)
-	$(CC) -o $@ $^ $(LDFLAGS) $(FPIC)
+	$(CC) -o $@ $^ $(LDFLAGS) $(FPIC) $(SHARED)
 
-$(OBJDIR)/%.sse.o: %.c
+$(TARGET_OUT_STATIC): $(OBJECTS_STATIC)
+	@mkdir -p $(dir $@)
+	$(AR) rcs $@ $^
+
+$(OBJDIR_SHARED)/%.sse.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -mno-sse3 -mno-avx $(FPIC)
+
+$(OBJDIR_SHARED)/%.sse3.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -msse3 -mno-avx $(FPIC)
+
+$(OBJDIR_SHARED)/%.avx.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -msse3 -mavx $(FPIC)
+
+$(OBJDIR_SHARED)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) -c -o $@ $< $(CFLAGS) -MMD $(FPIC)
+
+$(OBJDIR_STATIC)/%.sse.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -mno-sse3 -mno-avx
 
-$(OBJDIR)/%.sse3.o: %.c
+$(OBJDIR_STATIC)/%.sse3.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -msse3 -mno-avx
 
-$(OBJDIR)/%.avx.o: %.c
+$(OBJDIR_STATIC)/%.avx.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -msse3 -mavx
 
-$(OBJDIR)/%.o: %.c
+$(OBJDIR_STATIC)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD
 
 clean:
-	rm -f $(TARGET)
-	rm -rf $(OBJDIR)
+	rm -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC)
+	rm -rf $(OBJDIR_SHARED) $(OBJDIR_STATIC)
 
 clean-all:
-	rm -rf bin obj
+	rm -rf bin obj-shared obj-static
 
-.PHONY: clean clean-all
+.PHONY: all shared static clean clean-all
 
