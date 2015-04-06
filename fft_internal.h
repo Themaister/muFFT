@@ -1,6 +1,7 @@
 #ifndef MUFFT_INTERNAL_H__
 #define MUFFT_INTERNAL_H__
 
+#include "fft.h"
 #include <math.h>
 #include <complex.h>
 
@@ -49,10 +50,10 @@ DECLARE_FFT_CPU(sse3)
 DECLARE_FFT_CPU(sse)
 DECLARE_FFT_CPU(c)
 
-#define MUFFT_FLAG_MASK_CPU ((1 << 16) - 1)
-#define MUFFT_FLAG_CPU_AVX (1 << 0)
-#define MUFFT_FLAG_CPU_SSE3 (1 << 1)
-#define MUFFT_FLAG_CPU_SSE (1 << 2)
+#define MUFFT_FLAG_MASK_CPU MUFFT_FLAG_CPU_NO_SIMD
+#define MUFFT_FLAG_CPU_AVX MUFFT_FLAG_CPU_NO_AVX
+#define MUFFT_FLAG_CPU_SSE3 MUFFT_FLAG_CPU_NO_SSE3
+#define MUFFT_FLAG_CPU_SSE MUFFT_FLAG_CPU_NO_SSE
 
 #define MUFFT_FLAG_DIRECTION_INVERSE (1 << 16)
 #define MUFFT_FLAG_DIRECTION_FORWARD (1 << 17)

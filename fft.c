@@ -163,24 +163,24 @@ static bool add_step_1d(mufft_plan_1d *plan, const struct fft_step_1d *step, uns
     }
 }
 
-static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction)
+static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction, unsigned flags)
 {
     unsigned radix = N;
     unsigned p = 1;
 
-    unsigned flags = 0;
+    unsigned step_flags = 0;
     switch (direction)
     {
         case MUFFT_FORWARD:
-            flags |= MUFFT_FLAG_DIRECTION_FORWARD;
+            step_flags |= MUFFT_FLAG_DIRECTION_FORWARD;
             break;
 
         case MUFFT_INVERSE:
-            flags |= MUFFT_FLAG_DIRECTION_INVERSE;
+            step_flags |= MUFFT_FLAG_DIRECTION_INVERSE;
             break;
     }
-    // Add CPU flags. Just accept any CPU for now.
-    flags |= MUFFT_FLAG_MASK_CPU;
+    // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
+    step_flags |= MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
 
     while (radix > 1)
     {
@@ -193,7 +193,7 @@ static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction)
 
             if (radix % step->radix == 0 &&
                     N >= step->minimum_elements &&
-                    (flags & step->flags) == step->flags &&
+                    (step_flags & step->flags) == step->flags &&
                     (p >= step->minimum_p || p == step->fixed_p))
             {
                 if (add_step_1d(plan, step, p))
@@ -215,7 +215,7 @@ static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction)
     return true;
 }
 
-mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction)
+mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags)
 {
     if ((N & (N - 1)) != 0 || N == 1)
     {
@@ -240,7 +240,7 @@ mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction)
         goto error;
     }
 
-    if (!build_plan_1d(plan, N, direction))
+    if (!build_plan_1d(plan, N, direction, flags))
     {
         goto error;
     }
