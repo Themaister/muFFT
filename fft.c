@@ -13,6 +13,14 @@ struct mufft_step_1d
     unsigned twiddle_offset;
 };
 
+struct mufft_step_2d
+{
+    mufft_2d_func func;
+    unsigned radix;
+    unsigned p;
+    unsigned twiddle_offset;
+};
+
 struct mufft_plan_1d
 {
     struct mufft_step_1d *steps;
@@ -21,6 +29,19 @@ struct mufft_plan_1d
 
     cfloat *tmp_buffer;
     cfloat *twiddles;
+};
+
+struct mufft_plan_2d
+{
+    struct mufft_step_1d *steps_x;
+    unsigned num_steps_x;
+    struct mufft_step_2d *steps_y;
+    unsigned num_steps_y;
+    unsigned Nx, Ny;
+
+    cfloat *tmp_buffer;
+    cfloat *twiddles_x;
+    cfloat *twiddles_y;
 };
 
 static cfloat twiddle(int direction, int k, int p)
@@ -138,15 +159,16 @@ static const struct fft_step_2d fft_2d_table[] = {
     STAMP_CPU_2D(0, c, 1),
 };
 
-static bool add_step_1d(mufft_plan_1d *plan, const struct fft_step_1d *step, unsigned p)
+static bool add_step_1d(struct mufft_step_1d **steps, unsigned *num_steps,
+        const struct fft_step_1d *step, unsigned p)
 {
-    struct mufft_step_1d *new_steps = realloc(plan->steps, (plan->num_steps + 1) * sizeof(*new_steps));
+    struct mufft_step_1d *new_steps = realloc(*steps, (*num_steps + 1) * sizeof(*new_steps));
     if (new_steps != NULL)
     {
         unsigned twiddle_offset = 0;
-        if (plan->num_steps != 0)
+        if (*num_steps != 0)
         {
-            struct mufft_step_1d prev = plan->steps[plan->num_steps - 1];
+            struct mufft_step_1d prev = (*steps)[*num_steps - 1];
             twiddle_offset = prev.twiddle_offset +
                 (prev.p == 2 ? 3 : (prev.p * (prev.radix - 1)));
 
@@ -157,14 +179,14 @@ static bool add_step_1d(mufft_plan_1d *plan, const struct fft_step_1d *step, uns
             }
         }
 
-        plan->steps = new_steps;
-        plan->steps[plan->num_steps] = (struct mufft_step_1d) {
+        *steps = new_steps;
+        (*steps)[*num_steps] = (struct mufft_step_1d) {
             .func = step->func,
                 .radix = step->radix,
                 .p = p,
                 .twiddle_offset = twiddle_offset,
         };
-        plan->num_steps++;
+        (*num_steps)++;
         return true;
     }
     else
@@ -173,7 +195,7 @@ static bool add_step_1d(mufft_plan_1d *plan, const struct fft_step_1d *step, uns
     }
 }
 
-static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction, unsigned flags)
+static bool build_plan_1d(struct mufft_step_1d **steps, unsigned *num_steps, unsigned N, int direction, unsigned flags)
 {
     unsigned radix = N;
     unsigned p = 1;
@@ -206,7 +228,7 @@ static bool build_plan_1d(mufft_plan_1d *plan, unsigned N, int direction, unsign
                     (step_flags & step->flags) == step->flags &&
                     (p >= step->minimum_p || p == step->fixed_p))
             {
-                if (add_step_1d(plan, step, p))
+                if (add_step_1d(steps, num_steps, step, p))
                 {
                     found = true;
                     radix /= step->radix;
@@ -250,7 +272,7 @@ mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flag
         goto error;
     }
 
-    if (!build_plan_1d(plan, N, direction, flags))
+    if (!build_plan_1d(&plan->steps, &plan->num_steps, N, direction, flags))
     {
         goto error;
     }
@@ -262,6 +284,47 @@ error:
     mufft_free_plan_1d(plan);
     return NULL;
 }
+
+mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction, unsigned flags)
+{
+    if ((Nx & (Nx - 1)) != 0 || (Ny & (Ny - 1)) != 0 || (Nx == 1 && Ny == 1))
+    {
+        return NULL;
+    }
+
+    mufft_plan_2d *plan = mufft_calloc(sizeof(*plan));
+    if (plan == NULL)
+    {
+        goto error;
+    }
+
+    plan->twiddles_x = build_twiddles(Nx, direction);
+    plan->twiddles_y = build_twiddles(Ny, direction);
+    if (plan->twiddles_x == NULL || plan->twiddles_y == NULL)
+    {
+        goto error;
+    }
+
+    plan->tmp_buffer = mufft_alloc(Nx * Ny * sizeof(cfloat));
+    if (plan->tmp_buffer == NULL)
+    {
+        goto error;
+    }
+
+    if (!build_plan_1d(&plan->steps_x, &plan->num_steps_x, Nx, direction, flags))
+    {
+        goto error;
+    }
+
+    plan->Nx = Nx;
+    plan->Ny = Ny;
+    return plan;
+
+error:
+    mufft_free_plan_2d(plan);
+    return NULL;
+}
+
 
 void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
 {
@@ -296,6 +359,20 @@ void mufft_free_plan_1d(mufft_plan_1d *plan)
     free(plan->steps);
     mufft_free(plan->tmp_buffer);
     mufft_free(plan->twiddles);
+    mufft_free(plan);
+}
+
+void mufft_free_plan_2d(mufft_plan_2d *plan)
+{
+    if (plan == NULL)
+    {
+        return;
+    }
+    free(plan->steps_x);
+    free(plan->steps_y);
+    mufft_free(plan->tmp_buffer);
+    mufft_free(plan->twiddles_x);
+    mufft_free(plan->twiddles_y);
     mufft_free(plan);
 }
 

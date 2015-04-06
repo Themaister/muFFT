@@ -21,6 +21,11 @@ mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flag
 void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input);
 void mufft_free_plan_1d(mufft_plan_1d *plan);
 
+typedef struct mufft_plan_2d mufft_plan_2d;
+mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction, unsigned flags);
+void mufft_execute_plan_2d(mufft_plan_2d *plan, void *output, const void *input);
+void mufft_free_plan_2d(mufft_plan_2d *plan);
+
 void *mufft_alloc(size_t size);
 void *mufft_calloc(size_t size);
 void mufft_free(void *ptr);
