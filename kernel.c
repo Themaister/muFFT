@@ -61,7 +61,7 @@ void mufft_radix2_generic_c(void *output_, const void *input_,
 }
 
 
-void mufft_forward_radix4_p1_c(void *output, const void *input,
+void mufft_forward_radix4_p1_c(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples)
 {
    cfloat *output = output_;
@@ -91,9 +91,12 @@ void mufft_forward_radix4_p1_c(void *output, const void *input,
    }
 }
 
-void mufft_radix4_generic_c(void *output, const void *input,
+void mufft_radix4_generic_c(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+
    unsigned quarter_samples = samples >> 2;
    for (unsigned i = 0; i < quarter_samples; i++)
    {
@@ -275,7 +278,7 @@ void mufft_forward_radix2_p1_vert_c(void *output_, const void *input_,
    }
 }
 
-void mufft_radix2_generic_vert_c(void *output, const void *input,
+void mufft_radix2_generic_vert_c(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
    cfloat *output = output_;
@@ -305,7 +308,7 @@ void mufft_radix2_generic_vert_c(void *output, const void *input,
    }
 }
 
-void mufft_forward_radix4_p1_vert_c(void *output, const void *input,
+void mufft_forward_radix4_p1_vert_c(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
    cfloat *output = output_;
@@ -390,7 +393,7 @@ void mufft_radix4_generic_vert_c(void *output_, const void *input_,
    }
 }
 
-void mufft_forward_radix8_p1_vert_c(cfloat *output, const cfloat *input,
+void mufft_forward_radix8_p1_vert_c(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
    cfloat *output = output_;

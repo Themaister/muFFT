@@ -25,9 +25,9 @@ typedef void (*mufft_1d_func)(void *output, const void *input,
 typedef void (*mufft_2d_func)(void *output, const void *input,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
-#define FFT_1D_FUNC(name, arch) void mufft_ ## name ## _ ## arch ## (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples);
-#define FFT_2D_FUNC(name, arch) void mufft_ ## name ## _ ## arch ## (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
-
+#define MANGLE(name, arch) mufft_ ## name ## _ ## arch
+#define FFT_1D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples);
+#define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
 #define DECLARE_FFT_CPU(arch) \
    FFT_1D_FUNC(forward_radix8_p1, arch) \

@@ -1,5 +1,6 @@
 #include "../fft_internal.h"
 
+#undef MANGLE
 #if __AVX__
 #include <immintrin.h>
 #define MANGLE(x) x ## _avx
@@ -10,7 +11,7 @@
 #include <xmmintrin.h>
 #define MANGLE(x) x ## _sse
 #else
-#error "This file must be built with x86 SSE/AVX support.
+#error "This file must be built with x86 SSE/AVX support."
 #endif
 
 #if __AVX__
@@ -168,7 +169,7 @@ void MANGLE(mufft_radix2_generic)(void *output_, const void *input_,
    }
 }
 
-void MANGLE(mufft_forward_radix4_p1)(void *output, const void *input,
+void MANGLE(mufft_forward_radix4_p1)(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples)
 {
    cfloat *output = output_;
@@ -474,7 +475,7 @@ void MANGLE(mufft_forward_radix2_p1_vert)(void *output_, const void *input_,
    }
 }
 
-void mufft_radix2_generic_vert(void *output, const void *input,
+void mufft_radix2_generic_vert(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
    cfloat *output = output_;
@@ -506,7 +507,7 @@ void mufft_radix2_generic_vert(void *output, const void *input,
    }
 }
 
-void MANGLE(mufft_forward_radix4_p1_vert)(void *output, const void *input,
+void MANGLE(mufft_forward_radix4_p1_vert)(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
    cfloat *output = output_;

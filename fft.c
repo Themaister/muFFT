@@ -2,6 +2,7 @@
 #include "fft_internal.h"
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 struct mufft_step_1d
 {
