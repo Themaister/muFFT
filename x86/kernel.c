@@ -475,7 +475,7 @@ void MANGLE(mufft_forward_radix2_p1_vert)(void *output_, const void *input_,
    }
 }
 
-void mufft_radix2_generic_vert(void *output_, const void *input_,
+void MANGLE(mufft_radix2_generic_vert)(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
    cfloat *output = output_;
