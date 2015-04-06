@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdint.h>
 
 struct mufft_step_1d
 {
@@ -272,12 +273,33 @@ void mufft_free_plan_1d(mufft_plan_1d *plan)
 
 void *mufft_alloc(size_t size)
 {
-   void *ptr;
-   if (posix_memalign(&ptr, 64, size) < 0)
+#if defined(_ISOC11_SOURCE)
+   return aligned_alloc(MUFFT_ALIGNMENT, size);
+#elif (_POSIX_C_SOURCE >= 200112L) || (_XOPEN_SOURCE >= 600)
+   void *ptr = NULL;
+   if (posix_memalign(&ptr, MUFFT_ALIGNMENT, size) < 0)
    {
       return NULL;
    }
    return ptr;
+#else
+   // Align stuff ourselves. Kinda ugly, but will work anywhere.
+   void **place;
+   uintptr_t addr = 0;
+   void *ptr = malloc(MUFFT_ALIGNMENT + size + sizeof(uintptr_t));
+
+   if (ptr == NULL)
+   {
+      return NULL;
+   }
+
+   addr = ((uintptr_t)ptr + sizeof(uintptr_t) + MUFFT_ALIGNMENT)
+      & ~(MUFFT_ALIGNMENT - 1);
+   place = (void**)addr;
+   place[-1] = ptr;
+
+   return (void*)addr;
+#endif
 }
 
 void *mufft_calloc(size_t size)
@@ -292,6 +314,11 @@ void *mufft_calloc(size_t size)
 
 void mufft_free(void *ptr)
 {
+#if !defined(_ISOC11_SOURCE) && !((_POSIX_C_SOURCE >= 200112L) || (_XOPEN_SOURCE >= 600))
+   void **p = (void**)ptr;
+   free(p[-1]);
+#else
    free(ptr);
+#endif
 }
 

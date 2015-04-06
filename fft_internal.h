@@ -12,6 +12,8 @@
 #define M_SQRT_2 0.707106781186547524401
 #endif
 
+#define MUFFT_ALIGNMENT 64
+
 #define SWAP(a, b) do { cfloat *tmp = b; b = a; a = tmp; } while(0)
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))

@@ -12,6 +12,9 @@ ifeq ($(PLATFORM),)
    endif
 endif
 
+CFLAGS += -std=gnu99 -Wall -Wextra -pedantic
+LDFLAGS += -lm -Wl,-no-undefined
+
 ifeq ($(PLATFORM),win)
    CC = $(TOOLCHAIN_PREFIX)gcc
    AR = $(TOOLCHAIN_PREFIX)ar
@@ -30,9 +33,6 @@ else
    TARGET_SHARED := libmufft.so
    TARGET_STATIC := libmufft.a
 endif
-
-CFLAGS += -std=c99 -Wall -Wextra -pedantic -D_POSIX_C_SOURCE=200112L
-LDFLAGS += -lm -Wl,-no-undefined
 
 ifneq ($(TOOLCHAIN_PREFIX),)
    CC = $(TOOLCHAIN_PREFIX)gcc
