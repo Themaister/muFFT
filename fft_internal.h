@@ -22,8 +22,12 @@
 typedef complex float cfloat;
 typedef void (*mufft_1d_func)(void *output, const void *input,
       const cfloat *twiddles, unsigned p, unsigned samples);
+typedef void (*mufft_2d_func)(void *output, const void *input,
+      const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
 #define FFT_1D_FUNC(name, arch) void mufft_ ## name ## _ ## arch ## (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples);
+#define FFT_2D_FUNC(name, arch) void mufft_ ## name ## _ ## arch ## (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
+
 
 #define DECLARE_FFT_CPU(arch) \
    FFT_1D_FUNC(forward_radix8_p1, arch) \
@@ -32,7 +36,13 @@ typedef void (*mufft_1d_func)(void *output, const void *input,
    FFT_1D_FUNC(forward_radix2_p2, arch) \
    FFT_1D_FUNC(radix8_generic, arch) \
    FFT_1D_FUNC(radix4_generic, arch) \
-   FFT_1D_FUNC(radix2_generic, arch)
+   FFT_1D_FUNC(radix2_generic, arch) \
+   FFT_2D_FUNC(forward_radix8_p1_vert, arch) \
+   FFT_2D_FUNC(forward_radix4_p1_vert, arch) \
+   FFT_2D_FUNC(forward_radix2_p1_vert, arch) \
+   FFT_2D_FUNC(radix8_generic_vert, arch) \
+   FFT_2D_FUNC(radix4_generic_vert, arch) \
+   FFT_2D_FUNC(radix2_generic_vert, arch)
 
 DECLARE_FFT_CPU(avx)
 DECLARE_FFT_CPU(sse3)

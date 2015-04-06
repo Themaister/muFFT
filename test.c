@@ -16,13 +16,6 @@
 #define SIMD 1
 
 #if SIMD
-#if __AVX__
-#include <immintrin.h>
-#elif __SSE3__
-#include <pmmintrin.h>
-#elif __SSE__
-#include <xmmintrin.h>
-#endif
 #endif
 
 static inline cfloat twiddle(int direction, int k, int p)
@@ -99,10 +92,14 @@ static inline MM cmul_ps(MM a, MM b)
 
 #endif
 
-static void __attribute__((noinline)) fft_forward_radix2_p1_vert(cfloat *output, const cfloat *input,
-      const cfloat *twiddles, unsigned samples_x, unsigned samples_y)
+void mufft_forward_radix2_p1_vert(void *output_, const void *input_,
+      const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
    (void)twiddles;
+   (void)p;
+
 #if SIMD
    unsigned half_stride = samples_x * (samples_x >> 1);
    unsigned half_lines = samples_y >> 1;
@@ -144,9 +141,12 @@ static void __attribute__((noinline)) fft_forward_radix2_p1_vert(cfloat *output,
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix2_generic_vert(cfloat *output, const cfloat *input,
+void mufft_forward_radix2_generic_vert(void *output, const void *input,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+
 #if SIMD
    unsigned half_stride = samples_x * (samples_x >> 1);
    unsigned half_lines = samples_y >> 1;
@@ -198,10 +198,14 @@ static void __attribute__((noinline)) fft_forward_radix2_generic_vert(cfloat *ou
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix4_p1_vert(cfloat *output, const cfloat *input,
-      const cfloat *twiddles, unsigned samples_x, unsigned samples_y)
+void mufft_forward_radix4_p1_vert(void *output, const void *input,
+      const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
    (void)twiddles;
+   (void)p;
+
 #if SIMD
    unsigned quarter_stride = samples_x * (samples_x >> 2);
    unsigned quarter_lines = samples_y >> 2;
@@ -270,9 +274,13 @@ static void __attribute__((noinline)) fft_forward_radix4_p1_vert(cfloat *output,
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix8_p1_vert(cfloat *output, const cfloat *input,
-      const cfloat *twiddles, unsigned samples_x, unsigned samples_y)
+void mufft_forward_radix8_p1_vert(cfloat *output, const cfloat *input,
+      const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+   (void)p;
+
 #if SIMD
    unsigned octa_stride = samples_x * (samples_x >> 3);
    unsigned octa_lines = samples_y >> 3;
@@ -393,9 +401,12 @@ static void __attribute__((noinline)) fft_forward_radix8_p1_vert(cfloat *output,
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix4_generic_vert(cfloat *output, const cfloat *input,
+void mufft_forward_radix4_generic_vert(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+
 #if SIMD
    unsigned quarter_stride = samples_x * (samples_x >> 2);
    unsigned quarter_lines = samples_y >> 2;
@@ -474,9 +485,12 @@ static void __attribute__((noinline)) fft_forward_radix4_generic_vert(cfloat *ou
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix8_generic_vert(cfloat *output, const cfloat *input,
+void mufft_radix8_generic_vert(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+
 #if SIMD
    unsigned octa_stride = samples_x * (samples_x >> 3);
    unsigned octa_lines = samples_y >> 3;
@@ -611,10 +625,14 @@ static void __attribute__((noinline)) fft_forward_radix8_generic_vert(cfloat *ou
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix8_p1(cfloat *output, const cfloat *input,
-      const cfloat *twiddles, unsigned samples)
+void mufft_forward_radix8_p1(void *output_, const void *input_,
+      const cfloat *twiddles, unsigned p, unsigned samples)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
    (void)twiddles;
+   (void)p;
+
 #if SIMD
    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
    const MM w_f = splat_const_complex(+M_SQRT_2, -M_SQRT_2);
@@ -758,9 +776,12 @@ static void __attribute__((noinline)) fft_forward_radix8_p1(cfloat *output, cons
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix8_generic(cfloat *output, const cfloat *input,
+void mufft_radix8_generic(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+
 #if SIMD
    unsigned octa_samples = samples >> 3;
    for (unsigned i = 0; i < octa_samples; i += VSIZE)
@@ -890,9 +911,14 @@ static void __attribute__((noinline)) fft_forward_radix8_generic(cfloat *output,
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix4_p1(cfloat *output, const cfloat *input,
-      unsigned samples)
+void mufft_forward_radix4_p1(void *output, const void *input,
+      const cfloat *twiddles, unsigned p, unsigned samples)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+   (void)twiddles;
+   (void)p;
+
 #if SIMD
    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
    unsigned quarter_samples = samples >> 2;
@@ -962,7 +988,7 @@ static void __attribute__((noinline)) fft_forward_radix4_p1(cfloat *output, cons
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix4_generic(cfloat *output, const cfloat *input,
+void mufft_radix4_generic(void *output, const void *input,
       const cfloat *twiddles, unsigned p, unsigned samples)
 {
 #if SIMD
@@ -1038,9 +1064,14 @@ static void __attribute__((noinline)) fft_forward_radix4_generic(cfloat *output,
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix2_p1(cfloat *output, const cfloat *input,
-      unsigned samples)
+void fft_forward_radix2_p1(void *output_, const void *input_,
+      const cfloat *twiddles, unsigned p, unsigned samples)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+   (void)twiddles;
+   (void)p;
+
 #if SIMD
    unsigned half_samples = samples >> 1;
    for (unsigned i = 0; i < half_samples; i += VSIZE)
@@ -1078,10 +1109,13 @@ static void __attribute__((noinline)) fft_forward_radix2_p1(cfloat *output, cons
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix2_p2(cfloat *output, const cfloat *input,
-      const cfloat *twiddles, unsigned samples)
+void mufft_forward_radix2_p2(void *output_, const void *input_,
+      const cfloat *twiddles, unsigned p, unsigned samples)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
    (void)twiddles;
+   (void)p;
 #if SIMD
    unsigned half_samples = samples >> 1;
    const MM flip_signs = splat_const_dual_complex(0.0f, 0.0f, 0.0f, -0.0f);
@@ -1121,9 +1155,12 @@ static void __attribute__((noinline)) fft_forward_radix2_p2(cfloat *output, cons
 #endif
 }
 
-static void __attribute__((noinline)) fft_forward_radix2_generic(cfloat *output, const cfloat *input,
+void mufft_radix2_generic(void *output_, const void *input_,
       const cfloat *twiddles, unsigned p, unsigned samples)
 {
+   cfloat *output = output_;
+   const cfloat *input = input_;
+
 #if SIMD
    unsigned half_samples = samples >> 1;
 
