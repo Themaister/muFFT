@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
+#include <assert.h>
 
 struct mufft_step_base
 {
@@ -159,7 +160,7 @@ static const struct fft_step_2d fft_2d_table[] = {
     { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
         .func = mufft_radix4_generic_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 4, .radix = 4, .minimum_p = 4 }, \
     { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
-        .func = mufft_radix2_generic_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 2, .radix = 2, .minimum_p = 4 }
+        .func = mufft_radix2_generic_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 2, .radix = 2, .minimum_p = 2 }
 
 #ifdef MUFFT_HAVE_AVX
     STAMP_CPU_2D(MUFFT_FLAG_CPU_AVX, avx, 4),
@@ -176,12 +177,6 @@ static const struct fft_step_2d fft_2d_table[] = {
 static bool add_step(struct mufft_step_base **steps, unsigned *num_steps,
         const struct fft_step_base *step, unsigned p)
 {
-    struct mufft_step_base *new_steps = realloc(*steps, (*num_steps + 1) * sizeof(*new_steps));
-    if (new_steps == NULL)
-    {
-        return false;
-    }
-
     unsigned twiddle_offset = 0;
     if (*num_steps != 0)
     {
@@ -194,6 +189,12 @@ static bool add_step(struct mufft_step_base **steps, unsigned *num_steps,
         {
             twiddle_offset++;
         }
+    }
+
+    struct mufft_step_base *new_steps = realloc(*steps, (*num_steps + 1) * sizeof(*new_steps));
+    if (new_steps == NULL)
+    {
+        return false;
     }
 
     *steps = new_steps;
@@ -356,7 +357,7 @@ error:
 
 mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction, unsigned flags)
 {
-    if ((Nx & (Nx - 1)) != 0 || (Ny & (Ny - 1)) != 0 || (Nx == 1 && Ny == 1))
+    if ((Nx & (Nx - 1)) != 0 || (Ny & (Ny - 1)) != 0 || Nx == 1 || Ny == 1)
     {
         return NULL;
     }
@@ -422,6 +423,63 @@ void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
         step->func(out, in, pt + step->twiddle_offset, step->p, N);
         SWAP(out, in);
     }
+}
+
+void mufft_execute_plan_2d(mufft_plan_2d *plan, void *output, const void *input_)
+{
+    const cfloat *ptx = plan->twiddles_x;
+    const cfloat *pty = plan->twiddles_y;
+    const cfloat *input = input_;
+
+    unsigned Nx = plan->Nx;
+    unsigned Ny = plan->Ny;
+
+    cfloat *hout = output;
+    cfloat *hin = plan->tmp_buffer;
+    if ((plan->num_steps_y & 1) == 0)
+    {
+        SWAP(hout, hin);
+    }
+
+    cfloat *out = hin;
+    cfloat *in = hout;
+    if ((plan->num_steps_x & 1) == 1)
+    {
+        SWAP(out, in);
+    }
+
+    // First, horizontal transforms over all lines individually.
+    for (unsigned y = 0; y < Ny; y++)
+    {
+        cfloat *tin = in;
+        cfloat *tout = out;
+
+        const struct mufft_step_1d *first_step = &plan->steps_x[0];
+        first_step->func(tin + y * Nx, input + y * Nx, ptx, 1, Nx);
+
+        for (unsigned i = 1; i < plan->num_steps_x; i++)
+        {
+            const struct mufft_step_1d *step = &plan->steps_x[i];
+            step->func(tout + y * Nx, tin + y * Nx, ptx + step->twiddle_offset, step->p, Nx);
+            SWAP(tout, tin);
+        }
+
+        mufft_assert(tin == hin);
+    }
+
+    // Vertical transforms.
+    const struct mufft_step_2d *first_step = &plan->steps_y[0];
+    first_step->func(hout, hin, pty, 1, Nx, Ny);
+    SWAP(hout, hin);
+
+    for (unsigned i = 1; i < plan->num_steps_y; i++)
+    {
+        const struct mufft_step_2d *step = &plan->steps_y[i];
+        step->func(hout, hin, pty + step->twiddle_offset, step->p, Nx, Ny);
+        SWAP(hout, hin);
+    }
+
+    mufft_assert(hin == output);
 }
 
 void mufft_free_plan_1d(mufft_plan_1d *plan)

@@ -275,8 +275,8 @@ void mufft_radix2_p1_vert_c(void *output_, const void *input_,
     (void)twiddles;
     (void)p;
 
-    unsigned half_stride = samples_x * (samples_x >> 1);
     unsigned half_lines = samples_y >> 1;
+    unsigned half_stride = samples_x * half_lines;
 
     for (unsigned line = 0; line < half_lines;
             line++, input += samples_x, output += samples_x << 1)
@@ -301,8 +301,8 @@ void mufft_radix2_generic_vert_c(void *output_, const void *input_,
     cfloat *output = output_;
     const cfloat *input = input_;
 
-    unsigned half_stride = samples_x * (samples_x >> 1);
     unsigned half_lines = samples_y >> 1;
+    unsigned half_stride = samples_x * half_lines;
     unsigned out_stride = p * samples_x;
 
     for (unsigned line = 0; line < half_lines;
@@ -333,8 +333,8 @@ void mufft_forward_radix4_p1_vert_c(void *output_, const void *input_,
     (void)twiddles;
     (void)p;
 
-    unsigned quarter_stride = samples_x * (samples_x >> 2);
     unsigned quarter_lines = samples_y >> 2;
+    unsigned quarter_stride = samples_x * quarter_lines;
 
     for (unsigned line = 0; line < quarter_lines;
             line++, input += samples_x, output += samples_x << 2)
@@ -379,8 +379,8 @@ void mufft_radix4_generic_vert_c(void *output_, const void *input_,
     cfloat *output = output_;
     const cfloat *input = input_;
 
-    unsigned quarter_stride = samples_x * (samples_x >> 2);
     unsigned quarter_lines = samples_y >> 2;
+    unsigned quarter_stride = samples_x * quarter_lines;
     unsigned out_stride = p * samples_x;
 
     for (unsigned line = 0; line < quarter_lines; line++, input += samples_x)
@@ -423,8 +423,8 @@ void mufft_forward_radix8_p1_vert_c(void *output_, const void *input_,
     const cfloat *input = input_;
     (void)p;
 
-    unsigned octa_stride = samples_x * (samples_x >> 3);
     unsigned octa_lines = samples_y >> 3;
+    unsigned octa_stride = samples_x * octa_lines;
 
     for (unsigned line = 0; line < octa_lines;
             line++, input += samples_x, output += samples_x << 3)
@@ -463,7 +463,6 @@ void mufft_forward_radix8_p1_vert_c(void *output_, const void *input_,
             h = r3 - r7; // 4O + 3
 
             // p == 4 twiddles
-            e *= twiddles[4];
             f *= twiddles[5];
             g *= twiddles[6];
             h *= twiddles[7];
@@ -492,8 +491,8 @@ void mufft_radix8_generic_vert_c(void *output_, const void *input_,
     cfloat *output = output_;
     const cfloat *input = input_;
 
-    unsigned octa_stride = samples_x * (samples_x >> 3);
     unsigned octa_lines = samples_y >> 3;
+    unsigned octa_stride = samples_x * octa_lines;
     unsigned out_stride = p * samples_x;
 
     for (unsigned line = 0; line < octa_lines; line++, input += samples_x)

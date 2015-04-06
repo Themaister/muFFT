@@ -64,5 +64,11 @@ DECLARE_FFT_CPU(c)
 #define MUFFT_FLAG_DIRECTION_FORWARD (1 << 17)
 #define MUFFT_FLAG_DIRECTION_ANY 0
 
+#ifdef MUFFT_DEBUG
+#define mufft_assert(x) do { if (!(x)) { abort(); } } while(0)
+#else
+#define mufft_assert(x) ((void)0)
+#endif
+
 #endif
 

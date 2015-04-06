@@ -45,10 +45,16 @@ endif
 
 ifeq ($(DEBUG), 1)
    CONFIG := debug
-   CFLAGS += -O0 -g
+   CFLAGS += -O0 -g -DMUFFT_DEBUG
 else
    CONFIG := release
    CFLAGS += -Ofast
+endif
+
+ifeq ($(SANITIZE), 1)
+   CC = clang
+   CFLAGS += -fsanitize=memory
+   LDFLAGS += -fsanitize=memory
 endif
 
 PLATFORM_SOURCES_X86 := x86/kernel.sse.c x86/kernel.sse3.c x86/kernel.avx.c

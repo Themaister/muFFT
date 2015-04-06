@@ -474,8 +474,8 @@ void MANGLE(mufft_radix2_p1_vert)(void *output_, const void *input_,
     (void)twiddles;
     (void)p;
 
-    unsigned half_stride = samples_x * (samples_x >> 1);
     unsigned half_lines = samples_y >> 1;
+    unsigned half_stride = samples_x * half_lines;
 
     for (unsigned line = 0; line < half_lines;
             line++, input += samples_x, output += samples_x << 1)
@@ -500,8 +500,8 @@ void MANGLE(mufft_radix2_generic_vert)(void *output_, const void *input_,
     cfloat *output = output_;
     const cfloat *input = input_;
 
-    unsigned half_stride = samples_x * (samples_x >> 1);
     unsigned half_lines = samples_y >> 1;
+    unsigned half_stride = samples_x * half_lines;
     unsigned out_stride = p * samples_x;
 
     for (unsigned line = 0; line < half_lines;
@@ -535,8 +535,8 @@ void MANGLE(mufft_ ## direction ## _radix4_p1_vert)(void *output_, const void *i
     (void)twiddles; \
     (void)p; \
  \
-    unsigned quarter_stride = samples_x * (samples_x >> 2); \
     unsigned quarter_lines = samples_y >> 2; \
+    unsigned quarter_stride = samples_x * quarter_lines; \
     const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
  \
     for (unsigned line = 0; line < quarter_lines; \
@@ -576,8 +576,8 @@ void MANGLE(mufft_radix4_generic_vert)(void *output_, const void *input_,
     cfloat *output = output_;
     const cfloat *input = input_;
 
-    unsigned quarter_stride = samples_x * (samples_x >> 2);
     unsigned quarter_lines = samples_y >> 2;
+    unsigned quarter_stride = samples_x * quarter_lines;
     unsigned out_stride = p * samples_x;
 
     for (unsigned line = 0; line < quarter_lines; line++, input += samples_x)
@@ -625,8 +625,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void *output_, const void *i
     (void)p; \
     (void)twiddles; \
  \
-    unsigned octa_stride = samples_x * (samples_x >> 3); \
     unsigned octa_lines = samples_y >> 3; \
+    unsigned octa_stride = samples_x * octa_lines; \
     const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
     const MM w_f = splat_const_complex(+M_SQRT_2, twiddle8); \
     const MM w_h = splat_const_complex(-M_SQRT_2, twiddle8); \
@@ -697,8 +697,8 @@ void MANGLE(mufft_radix8_generic_vert)(void *output_, const void *input_,
     cfloat *output = output_;
     const cfloat *input = input_;
 
-    unsigned octa_stride = samples_x * (samples_x >> 3);
     unsigned octa_lines = samples_y >> 3;
+    unsigned octa_stride = samples_x * octa_lines;
     unsigned out_stride = p * samples_x;
 
     for (unsigned line = 0; line < octa_lines; line++, input += samples_x)
