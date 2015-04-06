@@ -33,7 +33,7 @@ static void test_fft_2d(unsigned Nx, unsigned Ny, int direction, unsigned flags)
     fftwf_execute(plan);
     mufft_execute_plan_2d(muplan, output, input);
 
-    const float epsilon = 0.000001f * Nx * Ny;
+    const float epsilon = 0.0000001f * Nx * Ny;
     for (unsigned i = 0; i < Nx * Ny; i++)
     {
         complex float delta = cabsf(output[i] - output_fftw[i]);
