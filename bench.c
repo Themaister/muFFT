@@ -146,12 +146,12 @@ static void run_benchmark_1d(unsigned N, unsigned iterations)
     double fftw_measured_mflops = flops / (1000000.0 * fftw_measured_time);
     double mufft_mflops = flops / (1000000.0 * mufft_time);
 
-    printf("FFTW estimate:  %06u %12.3f Mflops\n",
-            N, fftw_mflops);
-    printf("FFTW measure:   %06u %12.3f Mflops\n",
-            N, fftw_measured_mflops);
-    printf("muFFT:          %06u %12.3f Mflops\n",
-            N, mufft_mflops);
+    printf("FFTW estimate:  %06u %12.3f Mflops %12.3f us iteration\n",
+            N, fftw_mflops, 1000000.0 * fftw_time / iterations);
+    printf("FFTW measure:   %06u %12.3f Mflops %12.3f us iteration\n",
+            N, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
+    printf("muFFT:          %06u %12.3f Mflops %12.3f us iteration\n",
+            N, mufft_mflops, 1000000.0 * mufft_time / iterations);
 }
 
 static void run_benchmark_2d(unsigned Nx, unsigned Ny, unsigned iterations)
@@ -166,12 +166,12 @@ static void run_benchmark_2d(unsigned Nx, unsigned Ny, unsigned iterations)
     double fftw_measured_mflops = flops / (1000000.0 * fftw_measured_time);
     double mufft_mflops = flops / (1000000.0 * mufft_time);
 
-    printf("FFTW estimate:  %04u by %04u, %12.3f Mflops\n",
-            Nx, Ny, fftw_mflops);
-    printf("FFTW measure:   %04u by %04u, %12.3f Mflops\n",
-            Nx, Ny, fftw_measured_mflops);
-    printf("muFFT:          %04u by %04u, %12.3f Mflops\n",
-            Nx, Ny, mufft_mflops);
+    printf("FFTW estimate:  %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, fftw_mflops, 1000000.0 * fftw_time / iterations);
+    printf("FFTW measure:   %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
+    printf("muFFT:          %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, mufft_mflops, 1000000.0 * mufft_time / iterations);
 }
 
 int main(int argc, char *argv[])
