@@ -58,66 +58,59 @@ struct fft_step_1d
    unsigned flags;
 };
 
+struct fft_step_2d
+{
+   mufft_2d_func func;
+   unsigned minimum_elements_x;
+   unsigned minimum_elements_y;
+   unsigned radix;
+   unsigned fixed_p;
+   unsigned minimum_p;
+   unsigned flags;
+};
+
 static const struct fft_step_1d fft_1d_table[] = {
-   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix8_p1_avx, .minimum_elements = 32, .radix = 8, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix4_p1_avx, .minimum_elements = 16, .radix = 4, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix2_p1_avx, .minimum_elements =  8, .radix = 2, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix2_p2_avx, .minimum_elements =  8, .radix = 2, .fixed_p = 2, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix8_generic_avx, .minimum_elements = 32, .radix = 8, .minimum_p = 8 },
-   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix4_generic_avx, .minimum_elements = 16, .radix = 4, .minimum_p = 4 },
-   { .flags = MUFFT_FLAG_CPU_AVX | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix2_generic_avx, .minimum_elements =  8, .radix = 2, .minimum_p = 4 },
+#define STAMP_CPU_1D(arch, ext, min_x) \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+      .func = mufft_forward_radix8_p1_ ## ext, .minimum_elements = 8 * min_x, .radix = 8, .fixed_p = 1, .minimum_p = -1u }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+      .func = mufft_forward_radix4_p1_ ## ext, .minimum_elements = 4 * min_x, .radix = 4, .fixed_p = 1, .minimum_p = -1u }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+      .func = mufft_forward_radix2_p1_ ## ext, .minimum_elements = 2 * min_x, .radix = 2, .fixed_p = 1, .minimum_p = -1u }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+      .func = mufft_forward_radix2_p2_ ## ext, .minimum_elements = 2 * min_x, .radix = 2, .fixed_p = 2, .minimum_p = -1u }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
+      .func = mufft_radix8_generic_ ## ext, .minimum_elements = 8 * min_x, .radix = 8, .minimum_p = 8 }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
+      .func = mufft_radix4_generic_ ## ext, .minimum_elements = 4 * min_x, .radix = 4, .minimum_p = 4 }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
+      .func = mufft_radix2_generic_ ## ext, .minimum_elements = 2 * min_x, .radix = 2, .minimum_p = 4 }
 
-   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix8_p1_sse3, .minimum_elements = 16, .radix = 8, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix4_p1_sse3, .minimum_elements =  8, .radix = 4, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix2_p1_sse3, .minimum_elements =  4, .radix = 2, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix2_p2_sse3, .minimum_elements =  4, .radix = 2, .fixed_p = 2, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix8_generic_sse3, .minimum_elements = 16, .radix = 8, .minimum_p = 8 },
-   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix4_generic_sse3, .minimum_elements =  8, .radix = 4, .minimum_p = 4 },
-   { .flags = MUFFT_FLAG_CPU_SSE3 | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix2_generic_sse3, .minimum_elements =  4, .radix = 2, .minimum_p = 4 },
+   STAMP_CPU_1D(MUFFT_FLAG_CPU_AVX, avx, 4),
+   STAMP_CPU_1D(MUFFT_FLAG_CPU_SSE3, sse3, 2),
+   STAMP_CPU_1D(MUFFT_FLAG_CPU_SSE, sse, 2),
+   STAMP_CPU_1D(0, c, 1),
+};
 
-   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix8_p1_sse, .minimum_elements = 16, .radix = 8, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix4_p1_sse, .minimum_elements =  8, .radix = 4, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix2_p1_sse, .minimum_elements =  4, .radix = 2, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix2_p2_sse, .minimum_elements =  4, .radix = 2, .fixed_p = 2, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix8_generic_sse, .minimum_elements = 32, .radix = 8, .minimum_p = 8 },
-   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix4_generic_sse, .minimum_elements = 16, .radix = 4, .minimum_p = 4 },
-   { .flags = MUFFT_FLAG_CPU_SSE | MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix2_generic_sse, .minimum_elements =  8, .radix = 2, .minimum_p = 4 },
+static const struct fft_step_2d fft_2d_table[] = {
+#define STAMP_CPU_2D(arch, ext, min_x) \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+      .func = mufft_forward_radix8_p1_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 8, .radix = 8, .fixed_p = 1, .minimum_p = -1u }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+      .func = mufft_forward_radix4_p1_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 4, .radix = 4, .fixed_p = 1, .minimum_p = -1u }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+      .func = mufft_forward_radix2_p1_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 2, .radix = 2, .fixed_p = 1, .minimum_p = -1u }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
+      .func = mufft_radix8_generic_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 8, .radix = 8, .minimum_p = 8 }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
+      .func = mufft_radix4_generic_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 4, .radix = 4, .minimum_p = 4 }, \
+   { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
+      .func = mufft_radix2_generic_vert_ ## ext, .minimum_elements_x = min_x, .minimum_elements_y = 2, .radix = 2, .minimum_p = 4 }
 
-   { .flags = MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix8_p1_c, .minimum_elements = 8, .radix = 8, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix4_p1_c, .minimum_elements = 4, .radix = 4, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix2_p1_c, .minimum_elements = 2, .radix = 2, .fixed_p = 1, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_DIRECTION_FORWARD,
-      .func = mufft_forward_radix2_p2_c, .minimum_elements = 2, .radix = 2, .fixed_p = 2, .minimum_p = -1u },
-   { .flags = MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix8_generic_c, .minimum_elements = 8, .radix = 8, .minimum_p = 8 },
-   { .flags = MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix4_generic_c, .minimum_elements = 4, .radix = 4, .minimum_p = 4 },
-   { .flags = MUFFT_FLAG_DIRECTION_ANY,
-      .func = mufft_radix2_generic_c, .minimum_elements = 2, .radix = 2, .minimum_p = 4 },
+   STAMP_CPU_2D(MUFFT_FLAG_CPU_AVX, avx, 4),
+   STAMP_CPU_2D(MUFFT_FLAG_CPU_SSE3, sse3, 2),
+   STAMP_CPU_2D(MUFFT_FLAG_CPU_SSE, sse, 2),
+   STAMP_CPU_2D(0, c, 1),
 };
 
 static bool add_step_1d(mufft_plan_1d *plan, const struct fft_step_1d *step, unsigned p)
