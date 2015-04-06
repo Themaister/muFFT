@@ -3,8 +3,11 @@
 *.so
 *.dylib
 *.a
+*.exe
 /bin
 /obj
 /obj-static
 /obj-shared
+/mufft_test
+/mufft_bench
 

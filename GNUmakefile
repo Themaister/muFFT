@@ -87,7 +87,7 @@ OBJDIR_SHARED := obj-shared/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)
 OBJDIR_STATIC := obj-static/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)
 TARGET_OUT_SHARED := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/$(TARGET_SHARED)
 TARGET_OUT_STATIC := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/$(TARGET_STATIC)
-TARGET_TEST := bin/$(PLATFORM_ARCH)/$(PLATFORM)/$(CONFIG)/mufft_test$(EXE_SUFFIX)
+TARGET_TEST := mufft_test$(EXE_SUFFIX)
 SOURCES := fft.c kernel.c
 SOURCES_TEST := test.c
 
@@ -115,7 +115,6 @@ test: $(TARGET_TEST)
 -include $(DEPS)
 
 $(TARGET_TEST): static $(OBJECTS_TEST)
-	@mkdir -p $(dir $@)
 	$(CC) -o $@ $(OBJECTS_TEST) $(TARGET_OUT_STATIC) $(shell pkg-config fftw3f --libs) $(LDFLAGS) 
 
 $(TARGET_OUT_SHARED): $(OBJECTS_SHARED)
