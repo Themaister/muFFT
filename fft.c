@@ -351,11 +351,11 @@ mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags)
 
     if (flags & MUFFT_FLAG_FULL_R2C)
     {
-        plan->r2c_resolve = mufft_resolve_r2c_full_c;
+        plan->r2c_resolve = mufft_resolve_r2c_full_avx;
     }
     else
     {
-        plan->r2c_resolve = mufft_resolve_r2c_c;
+        plan->r2c_resolve = mufft_resolve_r2c_avx;
     }
 
     return plan;
@@ -391,7 +391,7 @@ mufft_plan_1d *mufft_create_plan_1d_c2r(unsigned N, unsigned flags)
         plan->r2c_twiddles[i] = I * twiddle(+1, i, complex_n);
     }
 
-    plan->c2r_resolve = mufft_resolve_c2r_c;
+    plan->c2r_resolve = mufft_resolve_c2r_avx;
     return plan;
 
 error:

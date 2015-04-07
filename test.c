@@ -169,9 +169,8 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
     {
         complex float a = output[i];
         complex float b = conjf(output[N - i]);
-        complex float delta = cabsf(a - b);
-        assert(crealf(delta) < epsilon);
-        assert(cimagf(delta) < epsilon);
+        float delta = cabsf(a - b);
+        assert(delta < epsilon);
     }
 
     mufft_free(input);
@@ -193,7 +192,7 @@ int main(void)
         }
     }
 
-    for (unsigned N = 4; N < 128 * 1024; N <<= 1)
+    for (unsigned N = 16; N < 128 * 1024; N <<= 1)
     {
         for (unsigned flags = 0; flags < 8; flags++)
         {

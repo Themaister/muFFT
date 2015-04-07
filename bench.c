@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
     if (argc == 1)
     {
         printf("\n1D benchmarks ...\n");
-        for (unsigned N = 4; N <= 128 * 1024; N <<= 1)
+        for (unsigned N = 16; N <= 128 * 1024; N <<= 1)
         {
             run_benchmark_1d(N, 400000000ull / N);
             run_benchmark_1d_real(N, 400000000ull / N);

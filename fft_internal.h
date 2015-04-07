@@ -28,15 +28,15 @@ typedef void (*mufft_2d_func)(void *output, const void *input,
 
 typedef void (*mufft_r2c_resolve_func)(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
 
-void mufft_resolve_r2c_c(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
-void mufft_resolve_r2c_full_c(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
-void mufft_resolve_c2r_c(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
-
 #define MANGLE(name, arch) mufft_ ## name ## _ ## arch
+#define FFT_RESOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
 #define FFT_1D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples);
 #define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
 #define DECLARE_FFT_CPU(arch) \
+    FFT_RESOLVE_FUNC(resolve_r2c, arch) \
+    FFT_RESOLVE_FUNC(resolve_r2c_full, arch) \
+    FFT_RESOLVE_FUNC(resolve_c2r, arch) \
     FFT_1D_FUNC(radix2_p1, arch) \
     FFT_1D_FUNC(forward_radix8_p1, arch) \
     FFT_1D_FUNC(forward_radix4_p1, arch) \

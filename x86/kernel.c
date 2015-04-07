@@ -26,7 +26,9 @@
 #define mul_ps(a, b) _mm256_mul_ps(a, b)
 #define addsub_ps(a, b) _mm256_addsub_ps(a, b)
 #define load_ps(addr) _mm256_load_ps((const float*)(addr))
+#define loadu_ps(addr) _mm256_loadu_ps((const float*)(addr))
 #define store_ps(addr, x) _mm256_store_ps((float*)(addr), x)
+#define storeu_ps(addr, x) _mm256_storeu_ps((float*)(addr), x)
 #define splat_const_complex(real, imag) _mm256_set_ps(imag, real, imag, real, imag, real, imag, real)
 #define splat_const_dual_complex(a, b, real, imag) _mm256_set_ps(imag, real, b, a, imag, real, b, a)
 #define splat_complex(addr) ((__m256)_mm256_broadcast_sd((const double*)(addr)))
@@ -41,7 +43,9 @@
 #define sub_ps(a, b) _mm_sub_ps(a, b)
 #define mul_ps(a, b) _mm_mul_ps(a, b)
 #define load_ps(addr) _mm_load_ps((const float*)(addr))
+#define loadu_ps(addr) _mm_loadu_ps((const float*)(addr))
 #define store_ps(addr, x) _mm_store_ps((float*)(addr), x)
+#define storeu_ps(addr, x) _mm_storeu_ps((float*)(addr), x)
 #define splat_const_complex(real, imag) _mm_set_ps(imag, real, imag, real)
 #define splat_const_dual_complex(a, b, real, imag) _mm_set_ps(imag, real, b, a)
 #define unpacklo_pd(a, b) ((__m128)_mm_unpacklo_pd((__m128d)(a), (__m128d)(b)))
@@ -76,6 +80,90 @@ static inline MM cmul_ps(MM a, MM b)
     MM r2 = movehdup_ps(b);
     MM R1 = mul_ps(r2, r3);
     return addsub_ps(R0, R1);
+}
+
+void MANGLE(mufft_resolve_c2r)(cfloat *output, const cfloat *input,
+        const cfloat *twiddles, unsigned samples)
+{
+    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
+    for (unsigned i = 0; i < samples; i += VSIZE)
+    {
+        MM a = load_ps(&input[i]);
+        MM b = loadu_ps(&input[samples - i - (VSIZE - 1)]);
+        b = permute_ps(xor_ps(b, flip_signs), _MM_SHUFFLE(1, 0, 3, 2));
+#if VSIZE == 4
+        b = _mm256_permute2f128_ps(b, b, 1);
+#endif
+        MM even = add_ps(a, b);
+        MM odd = cmul_ps(sub_ps(a, b), load_ps(&twiddles[i]));
+        store_ps(&output[i], add_ps(even, odd));
+    }
+}
+
+void MANGLE(mufft_resolve_r2c_full)(cfloat *output, const cfloat *input,
+        const cfloat *twiddles, unsigned samples)
+{
+    cfloat fe = crealf(input[0]);
+    cfloat fo = cimagf(input[0]);
+    output[0] = fe + fo;
+    output[samples] = fe - fo;
+    for (unsigned i = 1; i < VSIZE; i++)
+    {
+        cfloat a = input[i];
+        cfloat b = conjf(input[samples - i]);
+        cfloat fe = a + b;
+        cfloat fo = twiddles[i] * (a - b);
+        output[i] = 0.5f * (fe + fo);
+        output[i + samples] = 0.5f * (fe - fo);
+    }
+
+    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
+    const MM half = splat_const_complex(0.5f, 0.5f);
+    for (unsigned i = VSIZE; i < samples; i += VSIZE)
+    {
+        MM a = load_ps(&input[i]);
+        MM b = loadu_ps(&input[samples - i - (VSIZE - 1)]);
+        b = permute_ps(xor_ps(b, flip_signs), _MM_SHUFFLE(1, 0, 3, 2));
+#if VSIZE == 4
+        b = _mm256_permute2f128_ps(b, b, 1);
+#endif
+        MM fe = add_ps(a, b);
+        MM fo = cmul_ps(load_ps(&twiddles[i]), sub_ps(a, b));
+        store_ps(&output[i], mul_ps(half, add_ps(fe, fo)));
+        store_ps(&output[i + samples], mul_ps(half, sub_ps(fe, fo)));
+    }
+}
+
+void MANGLE(mufft_resolve_r2c)(cfloat *output, const cfloat *input,
+        const cfloat *twiddles, unsigned samples)
+{
+    cfloat fe = crealf(input[0]);
+    cfloat fo = cimagf(input[0]);
+    output[0] = fe + fo;
+    output[samples] = fe - fo;
+    for (unsigned i = 1; i < VSIZE; i++)
+    {
+        cfloat a = input[i];
+        cfloat b = conjf(input[samples - i]);
+        cfloat fe = a + b;
+        cfloat fo = twiddles[i] * (a - b);
+        output[i] = 0.5f * (fe + fo);
+    }
+
+    const MM flip_signs = splat_const_complex(0.0f, -0.0f);
+    const MM half = splat_const_complex(0.5f, 0.5f);
+    for (unsigned i = VSIZE; i < samples; i += VSIZE)
+    {
+        MM a = load_ps(&input[i]);
+        MM b = loadu_ps(&input[samples - i - (VSIZE - 1)]);
+        b = permute_ps(xor_ps(b, flip_signs), _MM_SHUFFLE(1, 0, 3, 2));
+#if VSIZE == 4
+        b = _mm256_permute2f128_ps(b, b, 1);
+#endif
+        MM fe = add_ps(a, b);
+        MM fo = cmul_ps(load_ps(&twiddles[i]), sub_ps(a, b));
+        store_ps(&output[i], mul_ps(half, add_ps(fe, fo)));
+    }
 }
 
 void MANGLE(mufft_radix2_p1)(void *output_, const void *input_,
