@@ -16,8 +16,11 @@ extern "C" {
 #define MUFFT_FLAG_CPU_NO_SSE3 (1 << 1)
 #define MUFFT_FLAG_CPU_NO_SSE (1 << 2)
 
+#define MUFFT_FLAG_FULL_R2C (1 << 16)
+
 typedef struct mufft_plan_1d mufft_plan_1d;
 mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags);
+mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags);
 void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input);
 void mufft_free_plan_1d(mufft_plan_1d *plan);
 

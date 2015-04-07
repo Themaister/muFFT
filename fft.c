@@ -38,6 +38,9 @@ struct mufft_plan_1d
 
     cfloat *tmp_buffer;
     cfloat *twiddles;
+
+    mufft_r2c_resolve_func r2c_resolve;
+    cfloat *r2c_twiddles;
 };
 
 struct mufft_plan_2d
@@ -316,6 +319,50 @@ static bool build_plan_2d(struct mufft_step_2d **steps, unsigned *num_steps, uns
     return true;
 }
 
+// The real-to-complex transform is implemented with a N / 2 complex transform with a
+// final butterfly which extracts real/imag parts of the complex transform.
+// See http://www.engineeringproductivitytools.com/stuff/T0001/PT10.HTM for details on algorithm.
+mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags)
+{
+    if ((N & (N - 1)) != 0 || N == 1)
+    {
+        return NULL;
+    }
+
+    unsigned complex_n = N / 2;
+
+    mufft_plan_1d *plan = mufft_create_plan_1d_c2c(complex_n, MUFFT_FORWARD, flags);
+    if (plan == NULL)
+    {
+        goto error;
+    }
+
+    plan->r2c_twiddles = mufft_alloc(complex_n * sizeof(cfloat));
+    if (plan->r2c_twiddles == NULL)
+    {
+        goto error;
+    }
+
+    for (unsigned i = 0; i < complex_n; i++)
+    {
+        plan->r2c_twiddles[i] = -I * twiddle(-1, i, complex_n);
+    }
+
+    if (flags & MUFFT_FLAG_FULL_R2C)
+    {
+        plan->r2c_resolve = mufft_resolve_r2c_full_c;
+    }
+    else
+    {
+        plan->r2c_resolve = mufft_resolve_r2c_c;
+    }
+
+    return plan;
+
+error:
+    mufft_free_plan_1d(plan);
+    return NULL;
+}
 
 mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags)
 {
@@ -408,8 +455,11 @@ void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
     cfloat *in = plan->tmp_buffer;
     unsigned N = plan->N;
 
+    // If we're doing real-to-complex, we need an extra step.
+    unsigned steps = plan->num_steps + (plan->r2c_twiddles != 0);
+
     // We want final step to write to output.
-    if ((plan->num_steps & 1) == 1)
+    if ((steps & 1) == 1)
     {
         SWAP(out, in);
     }
@@ -422,6 +472,12 @@ void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
         const struct mufft_step_1d *step = &plan->steps[i];
         step->func(out, in, pt + step->twiddle_offset, step->p, N);
         SWAP(out, in);
+    }
+
+    // Do Real-to-complex butterfly resolve.
+    if (plan->r2c_resolve != NULL)
+    {
+        plan->r2c_resolve(out, in, plan->r2c_twiddles, N);
     }
 }
 
@@ -491,6 +547,7 @@ void mufft_free_plan_1d(mufft_plan_1d *plan)
     free(plan->steps);
     mufft_free(plan->tmp_buffer);
     mufft_free(plan->twiddles);
+    mufft_free(plan->r2c_twiddles);
     mufft_free(plan);
 }
 
@@ -552,8 +609,11 @@ void *mufft_calloc(size_t size)
 void mufft_free(void *ptr)
 {
 #if !defined(_ISOC11_SOURCE) && !((_POSIX_C_SOURCE >= 200112L) || (_XOPEN_SOURCE >= 600))
-    void **p = (void**)ptr;
-    free(p[-1]);
+    if (ptr != NULL)
+    {
+        void **p = (void**)ptr;
+        free(p[-1]);
+    }
 #else
     free(ptr);
 #endif

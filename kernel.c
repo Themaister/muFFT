@@ -1,4 +1,43 @@
 #include "fft_internal.h"
+#include <math.h>
+#include <complex.h>
+
+void mufft_resolve_r2c_c(cfloat *output, const cfloat *input,
+        const cfloat *twiddles, unsigned samples)
+{
+    cfloat fe = crealf(input[0]);
+    cfloat fo = cimagf(input[0]);
+    output[0] = fe + fo;
+    output[samples] = fe - fo;
+
+    for (unsigned i = 1; i < samples; i++)
+    {
+        cfloat a = input[i];
+        cfloat b = conjf(input[samples - i]);
+        cfloat fe = a + b;
+        cfloat fo = twiddles[i] * (a - b);
+        output[i] = 0.5f * (fe + fo);
+    }
+}
+
+void mufft_resolve_r2c_full_c(cfloat *output, const cfloat *input,
+        const cfloat *twiddles, unsigned samples)
+{
+    cfloat fe = crealf(input[0]);
+    cfloat fo = cimagf(input[0]);
+    output[0] = fe + fo;
+    output[samples] = fe - fo;
+
+    for (unsigned i = 1; i < samples; i++)
+    {
+        cfloat a = input[i];
+        cfloat b = conjf(input[samples - i]);
+        cfloat fe = a + b;
+        cfloat fo = twiddles[i] * (a - b);
+        output[i] = 0.5f * (fe + fo);
+        output[i + samples] = 0.5f * (fe - fo);
+    }
+}
 
 void mufft_radix2_p1_c(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
