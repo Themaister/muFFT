@@ -21,6 +21,7 @@ extern "C" {
 typedef struct mufft_plan_1d mufft_plan_1d;
 mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags);
 mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags);
+mufft_plan_1d *mufft_create_plan_1d_c2r(unsigned N, unsigned flags);
 void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input);
 void mufft_free_plan_1d(mufft_plan_1d *plan);
 

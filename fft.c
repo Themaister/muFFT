@@ -40,6 +40,7 @@ struct mufft_plan_1d
     cfloat *twiddles;
 
     mufft_r2c_resolve_func r2c_resolve;
+    mufft_r2c_resolve_func c2r_resolve;
     cfloat *r2c_twiddles;
 };
 
@@ -364,6 +365,41 @@ error:
     return NULL;
 }
 
+mufft_plan_1d *mufft_create_plan_1d_c2r(unsigned N, unsigned flags)
+{
+    if ((N & (N - 1)) != 0 || N == 1)
+    {
+        return NULL;
+    }
+
+    unsigned complex_n = N / 2;
+
+    mufft_plan_1d *plan = mufft_create_plan_1d_c2c(complex_n, MUFFT_INVERSE, flags);
+    if (plan == NULL)
+    {
+        goto error;
+    }
+
+    plan->r2c_twiddles = mufft_alloc(complex_n * sizeof(cfloat));
+    if (plan->r2c_twiddles == NULL)
+    {
+        goto error;
+    }
+
+    for (unsigned i = 0; i < complex_n; i++)
+    {
+        plan->r2c_twiddles[i] = I * twiddle(+1, i, complex_n);
+    }
+
+    plan->c2r_resolve = mufft_resolve_c2r_c;
+    return plan;
+
+error:
+    mufft_free_plan_1d(plan);
+    return NULL;
+}
+
+
 mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags)
 {
     if ((N & (N - 1)) != 0 || N == 1)
@@ -456,7 +492,7 @@ void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
     unsigned N = plan->N;
 
     // If we're doing real-to-complex, we need an extra step.
-    unsigned steps = plan->num_steps + (plan->r2c_twiddles != 0);
+    unsigned steps = plan->num_steps + (plan->r2c_resolve != NULL);
 
     // We want final step to write to output.
     if ((steps & 1) == 1)
@@ -465,7 +501,15 @@ void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
     }
 
     const struct mufft_step_1d *first_step = &plan->steps[0];
-    first_step->func(in, input, pt, 1, N);
+    if (plan->c2r_resolve != NULL)
+    {
+        plan->c2r_resolve(out, input, plan->r2c_twiddles, N);
+        first_step->func(in, out, pt, 1, N);
+    }
+    else
+    {
+        first_step->func(in, input, pt, 1, N);
+    }
 
     for (unsigned i = 1; i < plan->num_steps; i++)
     {

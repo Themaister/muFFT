@@ -2,6 +2,17 @@
 #include <math.h>
 #include <complex.h>
 
+void mufft_resolve_c2r_c(cfloat *output, const cfloat *input,
+        const cfloat *twiddles, unsigned samples)
+{
+    for (unsigned i = 0; i < samples; i++)
+    {
+        cfloat a = input[i];
+        cfloat b = conjf(input[samples - i]);
+        output[i] = (a + b) + (a - b) * twiddles[i];
+    }
+}
+
 void mufft_resolve_r2c_c(cfloat *output, const cfloat *input,
         const cfloat *twiddles, unsigned samples)
 {

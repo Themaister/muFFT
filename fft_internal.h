@@ -30,6 +30,7 @@ typedef void (*mufft_r2c_resolve_func)(cfloat *output, const cfloat *input, cons
 
 void mufft_resolve_r2c_c(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
 void mufft_resolve_r2c_full_c(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
+void mufft_resolve_c2r_c(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
 
 #define MANGLE(name, arch) mufft_ ## name ## _ ## arch
 #define FFT_1D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples);
