@@ -1,9 +1,29 @@
+/* Copyright (C) 2015 Hans-Kristian Arntzen <maister@archlinux.us>
+ *
+ * Permission is hereby granted, free of charge,
+ * to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+ * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#define MUFFT_DEBUG
+
 #include "fft.h"
+#include "fft_internal.h"
 #include <complex.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 #include <fftw3.h> // Used as a reference.
 
@@ -19,16 +39,16 @@ static void test_fft_2d(unsigned Nx, unsigned Ny, int direction, unsigned flags)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = real + I * imag;
     }
 
     fftwf_plan plan = fftwf_plan_dft_2d(Ny, Nx, input_fftw, output_fftw,
             direction, FFTW_ESTIMATE);
-    assert(plan != NULL);
+    mufft_assert(plan != NULL);
     memcpy(input_fftw, input, Nx * Ny * sizeof(complex float));
 
     mufft_plan_2d *muplan = mufft_create_plan_2d_c2c(Nx, Ny, direction, flags);
-    assert(muplan != NULL);
+    mufft_assert(muplan != NULL);
 
     fftwf_execute(plan);
     mufft_execute_plan_2d(muplan, output, input);
@@ -37,7 +57,7 @@ static void test_fft_2d(unsigned Nx, unsigned Ny, int direction, unsigned flags)
     for (unsigned i = 0; i < Nx * Ny; i++)
     {
         float delta = cabsf(output[i] - output_fftw[i]);
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     mufft_free(input);
@@ -65,11 +85,11 @@ static void test_fft_1d(unsigned N, int direction, unsigned flags)
 
     fftwf_plan plan = fftwf_plan_dft_1d(N, input_fftw, output_fftw,
             direction, FFTW_ESTIMATE);
-    assert(plan != NULL);
+    mufft_assert(plan != NULL);
     memcpy(input_fftw, input, N * sizeof(complex float));
 
     mufft_plan_1d *muplan = mufft_create_plan_1d_c2c(N, direction, flags);
-    assert(muplan != NULL);
+    mufft_assert(muplan != NULL);
 
     fftwf_execute(plan);
     mufft_execute_plan_1d(muplan, output, input);
@@ -78,7 +98,7 @@ static void test_fft_1d(unsigned N, int direction, unsigned flags)
     for (unsigned i = 0; i < N; i++)
     {
         float delta = cabsf(output[i] - output_fftw[i]);
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     mufft_free(input);
@@ -108,11 +128,11 @@ static void test_fft_1d_c2r(unsigned N, unsigned flags)
     input[N / 2] = (float)rand() / RAND_MAX - 0.5f;
 
     fftwf_plan plan = fftwf_plan_dft_c2r_1d(N, input_fftw, output_fftw, FFTW_ESTIMATE);
-    assert(plan != NULL);
+    mufft_assert(plan != NULL);
     memcpy(input_fftw, input, fftN * sizeof(complex float));
 
     mufft_plan_1d *muplan = mufft_create_plan_1d_c2r(N, flags);
-    assert(muplan != NULL);
+    mufft_assert(muplan != NULL);
 
     fftwf_execute(plan);
     mufft_execute_plan_1d(muplan, output, input);
@@ -121,7 +141,7 @@ static void test_fft_1d_c2r(unsigned N, unsigned flags)
     for (unsigned i = 0; i < N; i++)
     {
         float delta = output[i] - output_fftw[i];
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     mufft_free(input);
@@ -148,13 +168,13 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
     }
 
     fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, input_fftw, output_fftw, FFTW_ESTIMATE);
-    assert(plan != NULL);
+    mufft_assert(plan != NULL);
     memcpy(input_fftw, input, N * sizeof(float));
 
     mufft_plan_1d *muplan_full = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_FULL_R2C);
-    assert(muplan_full != NULL);
+    mufft_assert(muplan_full != NULL);
     mufft_plan_1d *muplan = mufft_create_plan_1d_r2c(N, flags);
-    assert(muplan != NULL);
+    mufft_assert(muplan != NULL);
 
     fftwf_execute(plan);
     mufft_execute_plan_1d(muplan, output, input);
@@ -163,7 +183,7 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
     for (unsigned i = 0; i < fftN; i++)
     {
         float delta = cabsf(output[i] - output_fftw[i]);
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     mufft_execute_plan_1d(muplan_full, output, input);
@@ -171,7 +191,7 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
     for (unsigned i = 0; i < fftN; i++)
     {
         float delta = cabsf(output[i] - output_fftw[i]);
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     // Verify stuff is properly conjugated as well.
@@ -180,7 +200,7 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
         complex float a = output[i];
         complex float b = conjf(output[N - i]);
         float delta = cabsf(a - b);
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     mufft_free(input);
@@ -210,13 +230,13 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
     }
 
     fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, input_fftw, output_fftw, FFTW_ESTIMATE);
-    assert(plan != NULL);
+    mufft_assert(plan != NULL);
     memcpy(input_fftw, input, (N / 2) * sizeof(float));
 
     mufft_plan_1d *muplan_full = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_FULL_R2C | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
-    assert(muplan_full != NULL);
+    mufft_assert(muplan_full != NULL);
     mufft_plan_1d *muplan = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
-    assert(muplan != NULL);
+    mufft_assert(muplan != NULL);
 
     fftwf_execute(plan);
     mufft_execute_plan_1d(muplan, output, input);
@@ -225,7 +245,7 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
     for (unsigned i = 0; i < fftN; i++)
     {
         float delta = cabsf(output[i] - output_fftw[i]);
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     mufft_execute_plan_1d(muplan_full, output, input);
@@ -233,7 +253,7 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
     for (unsigned i = 0; i < fftN; i++)
     {
         float delta = cabsf(output[i] - output_fftw[i]);
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     // Verify stuff is properly conjugated as well.
@@ -242,7 +262,7 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
         complex float a = output[i];
         complex float b = conjf(output[N - i]);
         float delta = cabsf(a - b);
-        assert(delta < epsilon);
+        mufft_assert(delta < epsilon);
     }
 
     mufft_free(input);
