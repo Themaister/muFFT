@@ -37,12 +37,23 @@ extern "C" {
 #define MUFFT_FLAG_FULL_R2C (1 << 16)
 #define MUFFT_FLAG_ZERO_PAD_UPPER_HALF (1 << 17)
 
+#define MUFFT_CONV_METHOD_MONO_MONO 0
+#define MUFFT_CONV_METHOD_STEREO_MONO 1
+#define MUFFT_CONV_BLOCK_FIRST 0
+#define MUFFT_CONV_BLOCK_SECOND 1
+
 typedef struct mufft_plan_1d mufft_plan_1d;
 mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags);
 mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags);
 mufft_plan_1d *mufft_create_plan_1d_c2r(unsigned N, unsigned flags);
 void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input);
 void mufft_free_plan_1d(mufft_plan_1d *plan);
+
+typedef struct mufft_plan_conv mufft_plan_conv;
+mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned method);
+void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void *input);
+void mufft_execute_conv_output(mufft_plan_conv *plan, void *output);
+void mufft_free_plan_conv(mufft_plan_conv *plan);
 
 typedef struct mufft_plan_2d mufft_plan_2d;
 mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction, unsigned flags);

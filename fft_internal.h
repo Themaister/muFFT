@@ -45,13 +45,17 @@ typedef void (*mufft_2d_func)(void *output, const void *input,
         const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
 typedef void (*mufft_r2c_resolve_func)(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
+typedef void (*mufft_convolve_func)(cfloat *output, const cfloat *a, const cfloat *b,
+        float normalization, unsigned samples);
 
 #define MANGLE(name, arch) mufft_ ## name ## _ ## arch
+#define FFT_CONVOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat *output, const cfloat *a, const cfloat *b, float normalization, unsigned samples);
 #define FFT_RESOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
 #define FFT_1D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples);
 #define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
 #define DECLARE_FFT_CPU(arch) \
+    FFT_CONVOLVE_FUNC(convolve, arch) \
     FFT_RESOLVE_FUNC(resolve_r2c, arch) \
     FFT_RESOLVE_FUNC(resolve_r2c_full, arch) \
     FFT_RESOLVE_FUNC(resolve_c2r, arch) \
@@ -101,6 +105,8 @@ DECLARE_FFT_CPU(c)
 #else
 #define mufft_assert(x) ((void)0)
 #endif
+
+#define MUFFT_PADDING_COMPLEX_SAMPLES 4
 
 #endif
 

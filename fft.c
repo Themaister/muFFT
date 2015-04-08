@@ -75,6 +75,16 @@ struct mufft_plan_2d
     cfloat *twiddles_y;
 };
 
+struct mufft_plan_conv
+{
+    mufft_plan_1d *plans[2];
+    mufft_plan_1d *output_plan;
+    void *block[2];
+    void *conv_block;
+    unsigned conv_multiply_n;
+    float normalization;
+};
+
 static cfloat twiddle(int direction, int k, int p)
 {
     double phase = (M_PI * direction * k) / p;
@@ -485,6 +495,60 @@ error:
     return NULL;
 }
 
+mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned method)
+{
+    if ((N & (N - 1)) != 0 || N == 1)
+    {
+        return NULL;
+    }
+
+    mufft_plan_conv *conv = mufft_calloc(sizeof(*conv));
+    if (conv == NULL)
+    {
+        goto error;
+    }
+
+    switch (method)
+    {
+        case MUFFT_CONV_METHOD_MONO_MONO:
+            conv->plans[0] = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
+            conv->plans[1] = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
+            conv->output_plan = mufft_create_plan_1d_c2r(N, flags);
+            conv->block[0] = mufft_calloc((N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat));
+            conv->block[1] = mufft_calloc((N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat));
+            conv->conv_block = mufft_calloc((N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat));
+            conv->conv_multiply_n = N / 2 + 1;
+            break;
+
+        case MUFFT_CONV_METHOD_STEREO_MONO:
+            conv->plans[0] = mufft_create_plan_1d_c2c(N, MUFFT_FORWARD, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
+            conv->plans[1] = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF | MUFFT_FLAG_FULL_R2C);
+            conv->output_plan = mufft_create_plan_1d_c2c(N, MUFFT_INVERSE, flags);
+            conv->block[0] = mufft_calloc(N * sizeof(cfloat));
+            conv->block[1] = mufft_calloc(N * sizeof(cfloat));
+            conv->conv_block = mufft_calloc(N * sizeof(cfloat));
+            conv->conv_multiply_n = N;
+            break;
+    }
+
+    conv->normalization = 1.0f / N;
+
+    if (conv->plans[0] == NULL ||
+            conv->plans[1] == NULL ||
+            conv->block[0] == NULL ||
+            conv->block[1] == NULL ||
+            conv->conv_block == NULL ||
+            conv->output_plan == NULL)
+    {
+        goto error;
+    }
+
+    return conv;
+
+error:
+    mufft_free_plan_conv(conv);
+    return NULL;
+}
 
 mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags)
 {
@@ -569,6 +633,17 @@ error:
     return NULL;
 }
 
+void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void *input)
+{
+    mufft_execute_plan_1d(plan->plans[block], plan->block[block], input);
+}
+
+void mufft_execute_conv_output(mufft_plan_conv *plan, void *output)
+{
+    mufft_convolve_c(plan->conv_block, plan->block[0], plan->block[1],
+            plan->normalization, plan->conv_multiply_n);
+    mufft_execute_plan_1d(plan->output_plan, output, plan->conv_block);
+}
 
 void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
 {
@@ -692,6 +767,21 @@ void mufft_free_plan_2d(mufft_plan_2d *plan)
     mufft_free(plan->tmp_buffer);
     mufft_free(plan->twiddles_x);
     mufft_free(plan->twiddles_y);
+    mufft_free(plan);
+}
+
+void mufft_free_plan_conv(mufft_plan_conv *plan)
+{
+    if (plan == NULL)
+    {
+        return;
+    }
+    mufft_free_plan_1d(plan->plans[0]);
+    mufft_free_plan_1d(plan->plans[1]);
+    mufft_free_plan_1d(plan->output_plan);
+    mufft_free(plan->block[0]);
+    mufft_free(plan->block[1]);
+    mufft_free(plan->conv_block);
     mufft_free(plan);
 }
 

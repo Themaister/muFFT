@@ -20,6 +20,15 @@
 #include <math.h>
 #include <complex.h>
 
+void mufft_convolve_c(cfloat *output, const cfloat *a, const cfloat *b,
+        float normalization, unsigned samples)
+{
+    for (unsigned i = 0; i < samples; i++)
+    {
+        output[i] = a[i] * b[i] * normalization;
+    }
+}
+
 void mufft_resolve_c2r_c(cfloat *output, const cfloat *input,
         const cfloat *twiddles, unsigned samples)
 {
