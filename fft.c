@@ -533,11 +533,16 @@ mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned met
         goto error;
     }
 
-    switch (method)
+    unsigned first_extra_flag = (method & MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST) != 0 ?
+        MUFFT_FLAG_ZERO_PAD_UPPER_HALF : 0;
+    unsigned second_extra_flag = (method & MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND) != 0 ?
+        MUFFT_FLAG_ZERO_PAD_UPPER_HALF : 0;
+
+    switch (method & 1)
     {
-        case MUFFT_CONV_METHOD_MONO_MONO:
-            conv->plans[0] = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
-            conv->plans[1] = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
+        case MUFFT_CONV_METHOD_FLAG_MONO_MONO:
+            conv->plans[0] = mufft_create_plan_1d_r2c(N, flags | first_extra_flag);
+            conv->plans[1] = mufft_create_plan_1d_r2c(N, flags | second_extra_flag);
             conv->output_plan = mufft_create_plan_1d_c2r(N, flags);
             conv->block[0] = mufft_calloc((N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat));
             conv->block[1] = mufft_calloc((N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat));
@@ -545,9 +550,9 @@ mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned met
             conv->conv_multiply_n = N / 2 + 1;
             break;
 
-        case MUFFT_CONV_METHOD_STEREO_MONO:
-            conv->plans[0] = mufft_create_plan_1d_c2c(N, MUFFT_FORWARD, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
-            conv->plans[1] = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF | MUFFT_FLAG_FULL_R2C);
+        case MUFFT_CONV_METHOD_FLAG_STEREO_MONO:
+            conv->plans[0] = mufft_create_plan_1d_c2c(N, MUFFT_FORWARD, flags | first_extra_flag);
+            conv->plans[1] = mufft_create_plan_1d_r2c(N, flags | second_extra_flag | MUFFT_FLAG_FULL_R2C);
             conv->output_plan = mufft_create_plan_1d_c2c(N, MUFFT_INVERSE, flags);
             conv->block[0] = mufft_calloc(N * sizeof(cfloat));
             conv->block[1] = mufft_calloc(N * sizeof(cfloat));

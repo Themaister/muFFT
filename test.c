@@ -314,7 +314,7 @@ static void test_conv(unsigned N, unsigned flags)
 
     float *output = mufft_alloc(N * sizeof(float));
     float *ref_output = mufft_alloc(N * sizeof(float));
-    mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_MONO_MONO);
+    mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_FLAG_MONO_MONO | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
     mufft_assert(plan != NULL);
 
     mufft_execute_conv_input(plan, 0, a);
@@ -353,7 +353,7 @@ static void test_conv_stereo(unsigned N, unsigned flags)
 
     complex float *output = mufft_alloc(N * sizeof(complex float));
     complex float *ref_output = mufft_alloc(N * sizeof(complex float));
-    mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_STEREO_MONO);
+    mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_FLAG_STEREO_MONO | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
     mufft_assert(plan != NULL);
 
     mufft_execute_conv_input(plan, 0, a);
