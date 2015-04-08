@@ -192,7 +192,7 @@ int main(void)
         }
     }
 
-    for (unsigned N = 16; N < 128 * 1024; N <<= 1)
+    for (unsigned N = 4; N < 128 * 1024; N <<= 1)
     {
         for (unsigned flags = 0; flags < 8; flags++)
         {

@@ -112,6 +112,34 @@ struct fft_step_2d
     unsigned flags;
 };
 
+struct fft_r2c_resolve_step
+{
+    mufft_r2c_resolve_func func;
+    unsigned minimum_elements;
+    unsigned flags;
+};
+
+struct fft_r2c_resolve_step fft_r2c_resolve_table[] = {
+#define STAMP_CPU_RESOLVE(arch, ext, min_x) \
+    { .flags = arch | MUFFT_FLAG_FULL_R2C, \
+        .func = mufft_resolve_r2c_full_ ## ext, .minimum_elements = 2 * min_x }, \
+    { .flags = arch | MUFFT_FLAG_R2C, \
+        .func = mufft_resolve_r2c_ ## ext, .minimum_elements = 2 * min_x }, \
+    { .flags = arch | MUFFT_FLAG_C2R, \
+        .func = mufft_resolve_c2r_ ## ext, .minimum_elements = 2 * min_x }
+
+#ifdef MUFFT_HAVE_AVX
+    STAMP_CPU_RESOLVE(MUFFT_FLAG_CPU_AVX, avx, 4),
+#endif
+#ifdef MUFFT_HAVE_SSE3
+    STAMP_CPU_RESOLVE(MUFFT_FLAG_CPU_SSE3, sse3, 2),
+#endif
+#ifdef MUFFT_HAVE_SSE
+    STAMP_CPU_RESOLVE(MUFFT_FLAG_CPU_SSE, sse, 2),
+#endif
+    STAMP_CPU_RESOLVE(0, c, 1),
+};
+
 static const struct fft_step_1d fft_1d_table[] = {
 #define STAMP_CPU_1D(arch, ext, min_x) \
     { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
@@ -349,13 +377,25 @@ mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags)
         plan->r2c_twiddles[i] = -I * twiddle(-1, i, complex_n);
     }
 
-    if (flags & MUFFT_FLAG_FULL_R2C)
+    // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
+    unsigned resolve_flags = MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    resolve_flags |= (flags & MUFFT_FLAG_FULL_R2C) != 0 ?
+        MUFFT_FLAG_FULL_R2C : MUFFT_FLAG_R2C;
+
+    for (unsigned i = 0; i < ARRAY_SIZE(fft_r2c_resolve_table); i++)
     {
-        plan->r2c_resolve = mufft_resolve_r2c_full_avx;
+        const struct fft_r2c_resolve_step *step = &fft_r2c_resolve_table[i];
+        if ((step->flags & resolve_flags) == step->flags &&
+                N >= step->minimum_elements)
+        {
+            plan->r2c_resolve = step->func;
+            break;
+        }
     }
-    else
+
+    if (plan->r2c_resolve == NULL)
     {
-        plan->r2c_resolve = mufft_resolve_r2c_avx;
+        goto error;
     }
 
     return plan;
@@ -391,7 +431,26 @@ mufft_plan_1d *mufft_create_plan_1d_c2r(unsigned N, unsigned flags)
         plan->r2c_twiddles[i] = I * twiddle(+1, i, complex_n);
     }
 
-    plan->c2r_resolve = mufft_resolve_c2r_avx;
+    // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
+    unsigned resolve_flags = MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    resolve_flags |= MUFFT_FLAG_C2R;
+
+    for (unsigned i = 0; i < ARRAY_SIZE(fft_r2c_resolve_table); i++)
+    {
+        const struct fft_r2c_resolve_step *step = &fft_r2c_resolve_table[i];
+        if ((step->flags & resolve_flags) == step->flags &&
+                N >= step->minimum_elements)
+        {
+            plan->c2r_resolve = step->func;
+            break;
+        }
+    }
+
+    if (plan->c2r_resolve == NULL)
+    {
+        goto error;
+    }
+
     return plan;
 
 error:
