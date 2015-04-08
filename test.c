@@ -151,7 +151,9 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
     assert(plan != NULL);
     memcpy(input_fftw, input, N * sizeof(float));
 
-    mufft_plan_1d *muplan = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_FULL_R2C);
+    mufft_plan_1d *muplan_full = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_FULL_R2C);
+    assert(muplan_full != NULL);
+    mufft_plan_1d *muplan = mufft_create_plan_1d_r2c(N, flags);
     assert(muplan != NULL);
 
     fftwf_execute(plan);
@@ -164,7 +166,15 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
         assert(delta < epsilon);
     }
 
-    // Verify stuff is properly conjugated.
+    mufft_execute_plan_1d(muplan_full, output, input);
+
+    for (unsigned i = 0; i < fftN; i++)
+    {
+        float delta = cabsf(output[i] - output_fftw[i]);
+        assert(delta < epsilon);
+    }
+
+    // Verify stuff is properly conjugated as well.
     for (unsigned i = 1; i < N / 2; i++)
     {
         complex float a = output[i];
@@ -176,6 +186,7 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
     mufft_free(input);
     mufft_free(output);
     mufft_free_plan_1d(muplan);
+    mufft_free_plan_1d(muplan_full);
     fftwf_free(input_fftw);
     fftwf_free(output_fftw);
     fftwf_destroy_plan(plan);
@@ -212,5 +223,7 @@ int main(void)
             }
         }
     }
+
+    fftwf_cleanup();
 }
 
