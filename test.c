@@ -192,6 +192,68 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
     fftwf_destroy_plan(plan);
 }
 
+static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
+{
+    unsigned fftN = N / 2 + 1;
+    float *input = mufft_alloc((N / 2) * sizeof(float));
+    complex float *output = mufft_alloc(N * sizeof(complex float));
+    float *input_fftw = fftwf_malloc(N * sizeof(float));
+    complex float *output_fftw = fftwf_malloc(fftN * sizeof(fftwf_complex));
+
+    memset(input_fftw, 0, N * sizeof(float));
+
+    srand(0);
+    for (unsigned i = 0; i < N / 2; i++)
+    {
+        float real = (float)rand() / RAND_MAX - 0.5f;
+        input[i] = real;
+    }
+
+    fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, input_fftw, output_fftw, FFTW_ESTIMATE);
+    assert(plan != NULL);
+    memcpy(input_fftw, input, (N / 2) * sizeof(float));
+
+    mufft_plan_1d *muplan_full = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_FULL_R2C | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
+    assert(muplan_full != NULL);
+    mufft_plan_1d *muplan = mufft_create_plan_1d_r2c(N, flags | MUFFT_FLAG_ZERO_PAD_UPPER_HALF);
+    assert(muplan != NULL);
+
+    fftwf_execute(plan);
+    mufft_execute_plan_1d(muplan, output, input);
+
+    const float epsilon = 0.000001f * sqrtf(N);
+    for (unsigned i = 0; i < fftN; i++)
+    {
+        float delta = cabsf(output[i] - output_fftw[i]);
+        assert(delta < epsilon);
+    }
+
+    mufft_execute_plan_1d(muplan_full, output, input);
+
+    for (unsigned i = 0; i < fftN; i++)
+    {
+        float delta = cabsf(output[i] - output_fftw[i]);
+        assert(delta < epsilon);
+    }
+
+    // Verify stuff is properly conjugated as well.
+    for (unsigned i = 1; i < N / 2; i++)
+    {
+        complex float a = output[i];
+        complex float b = conjf(output[N - i]);
+        float delta = cabsf(a - b);
+        assert(delta < epsilon);
+    }
+
+    mufft_free(input);
+    mufft_free(output);
+    mufft_free_plan_1d(muplan);
+    mufft_free_plan_1d(muplan_full);
+    fftwf_free(input_fftw);
+    fftwf_free(output_fftw);
+    fftwf_destroy_plan(plan);
+}
+
 int main(void)
 {
     for (unsigned N = 2; N < 128 * 1024; N <<= 1)
@@ -208,6 +270,7 @@ int main(void)
         for (unsigned flags = 0; flags < 8; flags++)
         {
             test_fft_1d_r2c(N, flags);
+            test_fft_1d_r2c_half(N, flags);
             test_fft_1d_c2r(N, flags);
         }
     }
