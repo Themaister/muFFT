@@ -274,6 +274,36 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
     fftwf_destroy_plan(plan);
 }
 
+static void test_conv(void)
+{
+    unsigned N = 32;
+    float *a = mufft_calloc((N / 2) * sizeof(float));
+    float *b = mufft_calloc((N / 2) * sizeof(float));
+    a[0] = 1.0f;
+    a[1] = 1.0f;
+    a[2] = 6.0f;
+    b[1] = 2.0f;
+    b[9] = 4.0f;
+
+    float *output = mufft_alloc(N * sizeof(float));
+    mufft_plan_conv *plan = mufft_create_plan_conv(N, 0, MUFFT_CONV_METHOD_MONO_MONO);
+    mufft_assert(plan != NULL);
+
+    mufft_execute_conv_input(plan, 0, a);
+    mufft_execute_conv_input(plan, 1, b);
+    mufft_execute_conv_output(plan, output);
+
+    for (unsigned i = 0; i < N; i++)
+    {
+        printf("Conv [%u] = %.3f\n", i, output[i]);
+    }
+
+    mufft_free(a);
+    mufft_free(b);
+    mufft_free(output);
+    mufft_free_plan_conv(plan);
+}
+
 int main(void)
 {
     for (unsigned N = 2; N < 128 * 1024; N <<= 1)
@@ -294,6 +324,8 @@ int main(void)
             test_fft_1d_c2r(N, flags);
         }
     }
+
+    test_conv();
 
     for (unsigned Ny = 2; Ny < 1024; Ny <<= 1)
     {
