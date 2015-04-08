@@ -477,8 +477,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1)(void *output_, const void *input_
     (void)p; \
  \
     const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
-    const MM w_f = splat_const_complex(+M_SQRT_2, twiddle8); \
-    const MM w_h = splat_const_complex(-M_SQRT_2, twiddle8); \
+    const MM w_f = splat_const_complex(+M_SQRT1_2, twiddle8); \
+    const MM w_h = splat_const_complex(-M_SQRT1_2, twiddle8); \
  \
     unsigned octa_samples = samples >> 3; \
     for (unsigned i = 0; i < octa_samples; i += VSIZE) \
@@ -550,8 +550,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1)(void *output_, const void *input_
         MM r5 = sub_ps(c, g); \
         MM r6 = add_ps(d, h); \
         MM r7 = sub_ps(d, h)
-RADIX8_P1(forward, 0.0f, -0.0f, -M_SQRT_2)
-RADIX8_P1(inverse, -0.0f, +0.0f, +M_SQRT_2)
+RADIX8_P1(forward, 0.0f, -0.0f, -M_SQRT1_2)
+RADIX8_P1(inverse, -0.0f, +0.0f, +M_SQRT1_2)
 #undef RADIX8_LOAD_FIRST_BUTTERFLY
 #define RADIX8_LOAD_FIRST_BUTTERFLY \
         MM a = load_ps(&input[i]); \
@@ -568,7 +568,7 @@ RADIX8_P1(inverse, -0.0f, +0.0f, +M_SQRT_2)
         MM r5 = c; \
         MM r6 = d; \
         MM r7 = d
-RADIX8_P1(forward_half, 0.0f, -0.0f, -M_SQRT_2)
+RADIX8_P1(forward_half, 0.0f, -0.0f, -M_SQRT1_2)
 
 void MANGLE(mufft_radix8_generic)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
@@ -813,8 +813,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void *output_, const void *i
     unsigned octa_lines = samples_y >> 3; \
     unsigned octa_stride = samples_x * octa_lines; \
     const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
-    const MM w_f = splat_const_complex(+M_SQRT_2, twiddle8); \
-    const MM w_h = splat_const_complex(-M_SQRT_2, twiddle8); \
+    const MM w_f = splat_const_complex(+M_SQRT1_2, twiddle8); \
+    const MM w_h = splat_const_complex(-M_SQRT1_2, twiddle8); \
  \
     for (unsigned line = 0; line < octa_lines; \
             line++, input += samples_x, output += samples_x << 3) \
@@ -873,8 +873,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void *output_, const void *i
         } \
     } \
 }
-RADIX8_P1_VERT(forward, 0.0f, -0.0f, -M_SQRT_2)
-RADIX8_P1_VERT(inverse, -0.0f, 0.0f, +M_SQRT_2)
+RADIX8_P1_VERT(forward, 0.0f, -0.0f, -M_SQRT1_2)
+RADIX8_P1_VERT(inverse, -0.0f, 0.0f, +M_SQRT1_2)
 
 void MANGLE(mufft_radix8_generic_vert)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)

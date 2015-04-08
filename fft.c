@@ -81,8 +81,10 @@ struct mufft_plan_conv
     mufft_plan_1d *output_plan;
     void *block[2];
     void *conv_block;
-    unsigned conv_multiply_n;
     float normalization;
+
+    mufft_convolve_func convolve_func;
+    unsigned conv_multiply_n;
 };
 
 static cfloat twiddle(int direction, int k, int p)
@@ -147,7 +149,28 @@ struct fft_r2c_resolve_step
     unsigned flags;
 };
 
-struct fft_r2c_resolve_step fft_r2c_resolve_table[] = {
+struct fft_convolve_step
+{
+    mufft_convolve_func func;
+    unsigned flags;
+};
+
+static const struct fft_convolve_step convolve_table[] = {
+#define STAMP_CPU_CONVOLVE(arch, ext) \
+    { .flags = arch, .func = mufft_convolve_ ## ext }
+#ifdef MUFFT_HAVE_AVX
+    STAMP_CPU_CONVOLVE(MUFFT_FLAG_CPU_AVX, avx),
+#endif
+#ifdef MUFFT_HAVE_SSE3
+    STAMP_CPU_CONVOLVE(MUFFT_FLAG_CPU_SSE3, sse3),
+#endif
+#ifdef MUFFT_HAVE_SSE
+    STAMP_CPU_CONVOLVE(MUFFT_FLAG_CPU_SSE, sse),
+#endif
+    STAMP_CPU_CONVOLVE(0, c),
+};
+
+static const struct fft_r2c_resolve_step fft_r2c_resolve_table[] = {
 #define STAMP_CPU_RESOLVE(arch, ext, min_x) \
     { .flags = arch | MUFFT_FLAG_FULL_R2C, \
         .func = mufft_resolve_r2c_full_ ## ext, .minimum_elements = 2 * min_x }, \
@@ -497,6 +520,8 @@ error:
 
 mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned method)
 {
+    unsigned convolve_flags = MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+
     if ((N & (N - 1)) != 0 || N == 1)
     {
         return NULL;
@@ -539,6 +564,21 @@ mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned met
             conv->block[1] == NULL ||
             conv->conv_block == NULL ||
             conv->output_plan == NULL)
+    {
+        goto error;
+    }
+
+    for (unsigned i = 0; i < ARRAY_SIZE(convolve_table); i++)
+    {
+        const struct fft_convolve_step *step = &convolve_table[i];
+        if ((step->flags & convolve_flags) == step->flags)
+        {
+            conv->convolve_func = step->func;
+            break;
+        }
+    }
+
+    if (conv->convolve_func == NULL)
     {
         goto error;
     }
@@ -640,7 +680,7 @@ void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void 
 
 void mufft_execute_conv_output(mufft_plan_conv *plan, void *output)
 {
-    mufft_convolve_avx(plan->conv_block, plan->block[0], plan->block[1],
+    plan->convolve_func(plan->conv_block, plan->block[0], plan->block[1],
             plan->normalization, plan->conv_multiply_n);
     mufft_execute_plan_1d(plan->output_plan, output, plan->conv_block);
 }

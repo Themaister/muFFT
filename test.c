@@ -16,7 +16,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#ifndef MUFFT_DEBUG
 #define MUFFT_DEBUG
+#endif
 
 #include "fft.h"
 #include "fft_internal.h"
@@ -274,33 +276,102 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
     fftwf_destroy_plan(plan);
 }
 
-static void test_conv(void)
+#define convolve(T, name) \
+static void convolve_ ## name(T *output, const T *a, const float *b, unsigned N) \
+{ \
+    for (unsigned i = 0; i < 2 * N; i++) \
+    { \
+        T sum = 0.0f; \
+ \
+        unsigned start_x = 0; \
+        start_x = (i >= N) ? (i - (N - 1)) : 0; \
+ \
+        unsigned end_x = i; \
+        end_x = (end_x >= N) ? N - 1 : end_x; \
+ \
+        for (unsigned x = start_x; x <= end_x; x++) \
+        { \
+            sum += a[i - x] * b[x]; \
+        } \
+ \
+        output[i] = sum; \
+    } \
+}
+convolve(float, float)
+convolve(complex float, complex)
+
+static void test_conv(unsigned N, unsigned flags)
 {
-    unsigned N = 32;
     float *a = mufft_calloc((N / 2) * sizeof(float));
     float *b = mufft_calloc((N / 2) * sizeof(float));
-    a[0] = 1.0f;
-    a[1] = 1.0f;
-    a[2] = 6.0f;
-    b[1] = 2.0f;
-    b[9] = 4.0f;
+
+    srand(0);
+    for (unsigned i = 0; i < N / 2; i++)
+    {
+        a[i] = (float)rand() / RAND_MAX - 0.5f;
+        b[i] = (float)rand() / RAND_MAX - 0.5f;
+    }
 
     float *output = mufft_alloc(N * sizeof(float));
-    mufft_plan_conv *plan = mufft_create_plan_conv(N, 0, MUFFT_CONV_METHOD_MONO_MONO);
+    float *ref_output = mufft_alloc(N * sizeof(float));
+    mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_MONO_MONO);
     mufft_assert(plan != NULL);
 
     mufft_execute_conv_input(plan, 0, a);
     mufft_execute_conv_input(plan, 1, b);
     mufft_execute_conv_output(plan, output);
 
+    convolve_float(ref_output, a, b, N / 2);
+
+    const float epsilon = 0.000002f * sqrtf(N);
     for (unsigned i = 0; i < N; i++)
     {
-        printf("Conv [%u] = %.3f\n", i, output[i]);
+        float delta = fabsf(ref_output[i] - output[i]);
+        mufft_assert(delta < epsilon);
     }
 
     mufft_free(a);
     mufft_free(b);
     mufft_free(output);
+    mufft_free(ref_output);
+    mufft_free_plan_conv(plan);
+}
+
+static void test_conv_stereo(unsigned N, unsigned flags)
+{
+    complex float *a = mufft_calloc((N / 2) * sizeof(complex float));
+    float *b = mufft_calloc((N / 2) * sizeof(float));
+
+    srand(0);
+    for (unsigned i = 0; i < N / 2; i++)
+    {
+        float real = (float)rand() / RAND_MAX - 0.5f;
+        float imag = (float)rand() / RAND_MAX - 0.5f;
+        a[i] = real + I * imag;
+        b[i] = (float)rand() / RAND_MAX - 0.5f;
+    }
+
+    complex float *output = mufft_alloc(N * sizeof(complex float));
+    complex float *ref_output = mufft_alloc(N * sizeof(complex float));
+    mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_STEREO_MONO);
+    mufft_assert(plan != NULL);
+
+    mufft_execute_conv_input(plan, 0, a);
+    mufft_execute_conv_input(plan, 1, b);
+    mufft_execute_conv_output(plan, output);
+    convolve_complex(ref_output, a, b, N / 2);
+
+    const float epsilon = 0.000002f * sqrtf(N);
+    for (unsigned i = 0; i < N; i++)
+    {
+        float delta = cabsf(ref_output[i] - output[i]);
+        mufft_assert(delta < epsilon);
+    }
+
+    mufft_free(a);
+    mufft_free(b);
+    mufft_free(output);
+    mufft_free(ref_output);
     mufft_free_plan_conv(plan);
 }
 
@@ -325,7 +396,14 @@ int main(void)
         }
     }
 
-    test_conv();
+    for (unsigned N = 4; N < 128 * 1024; N <<= 1)
+    {
+        for (unsigned flags = 0; flags < 8; flags++)
+        {
+            test_conv(N, flags);
+            test_conv_stereo(N, flags);
+        }
+    }
 
     for (unsigned Ny = 2; Ny < 1024; Ny <<= 1)
     {

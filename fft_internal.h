@@ -24,11 +24,11 @@
 #include <complex.h>
 
 #ifndef M_PI
-#define M_PI 3.14159265359
+#define M_PI 3.14159265358979323846
 #endif
 
-#ifndef M_SQRT_2
-#define M_SQRT_2 0.707106781186547524401
+#ifndef M_SQRT1_2
+#define M_SQRT1_2 0.707106781186547524401
 #endif
 
 #define MUFFT_ALIGNMENT 64
