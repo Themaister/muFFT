@@ -159,6 +159,78 @@ static double bench_fft_1d(unsigned N, unsigned iterations, unsigned flags)
     return end_time - start_time;
 }
 
+static double bench_fft_conv(unsigned N, unsigned iterations, unsigned flags)
+{
+    float *a = mufft_alloc(N * sizeof(float));
+    float *b = mufft_alloc(N * sizeof(float));
+    float *output = mufft_alloc(2 * N * sizeof(float));
+
+    srand(0);
+    for (unsigned i = 0; i < N; i++)
+    {
+        a[i] = (float)rand() / RAND_MAX - 0.5f;
+        b[i] = (float)rand() / RAND_MAX - 0.5f;
+    }
+
+    mufft_plan_conv *plan = mufft_create_plan_conv(2 * N, flags,
+            MUFFT_CONV_METHOD_FLAG_MONO_MONO |
+            MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST |
+            MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
+
+    mufft_execute_conv_input(plan, 1, b);
+    double start_time = mufft_get_time();
+    for (unsigned i = 0; i < iterations; i++)
+    {
+        mufft_execute_conv_input(plan, 0, a);
+        mufft_execute_conv_output(plan, output);
+    }
+    double end_time = mufft_get_time();
+
+    mufft_free(a);
+    mufft_free(b);
+    mufft_free(output);
+    mufft_free_plan_conv(plan);
+
+    return end_time - start_time;
+}
+
+static double bench_fft_conv_stereo(unsigned N, unsigned iterations, unsigned flags)
+{
+    complex float *a = mufft_alloc(N * sizeof(complex float));
+    float *b = mufft_alloc(N * sizeof(float));
+    complex float *output = mufft_alloc(2 * N * sizeof(complex float));
+
+    srand(0);
+    for (unsigned i = 0; i < N; i++)
+    {
+        float real = (float)rand() / RAND_MAX - 0.5f;
+        float imag = (float)rand() / RAND_MAX - 0.5f;
+        a[i] = real + _Complex_I * imag;
+        b[i] = (float)rand() / RAND_MAX - 0.5f;
+    }
+
+    mufft_plan_conv *plan = mufft_create_plan_conv(2 * N, flags,
+            MUFFT_CONV_METHOD_FLAG_STEREO_MONO |
+            MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST |
+            MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
+
+    mufft_execute_conv_input(plan, 1, b);
+    double start_time = mufft_get_time();
+    for (unsigned i = 0; i < iterations; i++)
+    {
+        mufft_execute_conv_input(plan, 0, a);
+        mufft_execute_conv_output(plan, output);
+    }
+    double end_time = mufft_get_time();
+
+    mufft_free(a);
+    mufft_free(b);
+    mufft_free(output);
+    mufft_free_plan_conv(plan);
+
+    return end_time - start_time;
+}
+
 static double bench_fft_1d_real(unsigned N, unsigned iterations, unsigned flags)
 {
     unsigned fftN = N / 2 + 1;
@@ -268,12 +340,22 @@ static void run_benchmark_1d(unsigned N, unsigned iterations)
     double fftw_measured_mflops = flops / (1000000.0 * fftw_measured_time);
     double mufft_mflops = flops / (1000000.0 * mufft_time);
 
-    printf("FFTW C2C estimate:  %06u %12.3f Mflops %12.3f us iteration\n",
+    printf("FFTW C2C estimate:      %06u %12.3f Mflops %12.3f us iteration\n",
             N, fftw_mflops, 1000000.0 * fftw_time / iterations);
-    printf("FFTW C2C measure:   %06u %12.3f Mflops %12.3f us iteration\n",
+    printf("FFTW C2C measure:       %06u %12.3f Mflops %12.3f us iteration\n",
             N, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
-    printf("muFFT C2C:          %06u %12.3f Mflops %12.3f us iteration\n",
+    printf("muFFT C2C:              %06u %12.3f Mflops %12.3f us iteration\n",
             N, mufft_mflops, 1000000.0 * mufft_time / iterations);
+}
+
+static void run_benchmark_conv(unsigned N, unsigned iterations)
+{
+    double mufft_time = bench_fft_conv(N, iterations, 0);
+    double mufft_stereo_time = bench_fft_conv_stereo(N, iterations, 0);
+    printf("muFFT conv mono:        %06u %12.3f us iteration\n",
+            N, 1000000.0 * mufft_time / iterations);
+    printf("muFFT conv stereo:      %06u %12.3f us iteration\n",
+            N, 1000000.0 * mufft_stereo_time / iterations);
 }
 
 static void run_benchmark_1d_real(unsigned N, unsigned iterations)
@@ -312,11 +394,11 @@ static void run_benchmark_2d(unsigned Nx, unsigned Ny, unsigned iterations)
     double fftw_measured_mflops = flops / (1000000.0 * fftw_measured_time);
     double mufft_mflops = flops / (1000000.0 * mufft_time);
 
-    printf("FFTW estimate:  %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+    printf("FFTW estimate:          %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
             Nx, Ny, fftw_mflops, 1000000.0 * fftw_time / iterations);
-    printf("FFTW measure:   %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+    printf("FFTW measure:           %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
             Nx, Ny, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
-    printf("muFFT:          %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+    printf("muFFT:                  %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
             Nx, Ny, mufft_mflops, 1000000.0 * mufft_time / iterations);
 }
 
@@ -353,6 +435,7 @@ int main(int argc, char *argv[])
         unsigned Nx = strtoul(argv[2], NULL, 0);
         run_benchmark_1d(Nx, iterations);
         run_benchmark_1d_real(Nx, iterations);
+        run_benchmark_conv(Nx, iterations);
     }
     else if (argc == 4)
     {
@@ -361,5 +444,7 @@ int main(int argc, char *argv[])
         unsigned Ny = strtoul(argv[3], NULL, 0);
         run_benchmark_2d(Nx, Ny, iterations);
     }
+
+    fftwf_cleanup();
 }
 
