@@ -640,7 +640,7 @@ void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void 
 
 void mufft_execute_conv_output(mufft_plan_conv *plan, void *output)
 {
-    mufft_convolve_c(plan->conv_block, plan->block[0], plan->block[1],
+    mufft_convolve_avx(plan->conv_block, plan->block[0], plan->block[1],
             plan->normalization, plan->conv_multiply_n);
     mufft_execute_plan_1d(plan->output_plan, output, plan->conv_block);
 }

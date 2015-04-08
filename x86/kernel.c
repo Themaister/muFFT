@@ -100,6 +100,19 @@ static inline MM cmul_ps(MM a, MM b)
     return addsub_ps(R0, R1);
 }
 
+void MANGLE(mufft_convolve)(cfloat *output, const cfloat *input_a, const cfloat *input_b,
+        float normalization, unsigned samples)
+{
+    const MM n = splat_const_complex(normalization, normalization);
+    for (unsigned i = 0; i < samples; i += VSIZE)
+    {
+        MM a = load_ps(&input_a[i]);
+        MM b = load_ps(&input_b[i]);
+        MM res = mul_ps(cmul_ps(a, b), n);
+        store_ps(&output[i], res);
+    }
+}
+
 void MANGLE(mufft_resolve_c2r)(cfloat *output, const cfloat *input,
         const cfloat *twiddles, unsigned samples)
 {
