@@ -17,6 +17,7 @@ extern "C" {
 #define MUFFT_FLAG_CPU_NO_SSE (1 << 2)
 
 #define MUFFT_FLAG_FULL_R2C (1 << 16)
+#define MUFFT_FLAG_ZERO_PAD_UPPER_HALF (1 << 17)
 
 typedef struct mufft_plan_1d mufft_plan_1d;
 mufft_plan_1d *mufft_create_plan_1d_c2c(unsigned N, int direction, unsigned flags);

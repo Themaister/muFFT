@@ -70,6 +70,26 @@ void mufft_radix2_p1_c(void *output_, const void *input_,
     }
 }
 
+void mufft_radix2_half_p1_c(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples)
+{
+    cfloat *output = output_;
+    const cfloat *input = input_;
+    (void)twiddles;
+    (void)p;
+
+    unsigned half_samples = samples >> 1;
+    for (unsigned i = 0; i < half_samples; i++)
+    {
+        cfloat a = input[i];
+        cfloat b = 0.0f;
+
+        unsigned j = i << 1;
+        output[j + 0] = a + b;
+        output[j + 1] = a - b;
+    }
+}
+
 void mufft_forward_radix2_p2_c(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
 {
@@ -136,6 +156,34 @@ void mufft_forward_radix4_p1_c(void *output_, const void *input_,
         cfloat r1 = a - c;
         cfloat r2 = b + d;
         cfloat r3 = b - d;
+        r3 *= twiddles[2];
+
+        unsigned j = i << 2;
+        output[j + 0] = r0 + r2;
+        output[j + 1] = r1 + r3;
+        output[j + 2] = r0 - r2;
+        output[j + 3] = r1 - r3;
+    }
+}
+
+void mufft_forward_half_radix4_p1_c(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples)
+{
+    cfloat *output = output_;
+    const cfloat *input = input_;
+    (void)twiddles;
+    (void)p;
+
+    unsigned quarter_samples = samples >> 2;
+    for (unsigned i = 0; i < quarter_samples; i++)
+    {
+        cfloat a = input[i];
+        cfloat b = input[i + quarter_samples];
+
+        cfloat r0 = a;
+        cfloat r1 = a;
+        cfloat r2 = b;
+        cfloat r3 = b;
         r3 *= twiddles[2];
 
         unsigned j = i << 2;
@@ -232,6 +280,62 @@ void mufft_forward_radix8_p1_c(void *output_, const void *input_,
         f = r3 + r7; // 4O + 1
         g = r2 - r6; // 4O + 2
         h = r3 - r7; // 4O + 3
+
+        // p == 4 twiddles
+        e *= twiddles[4];
+        f *= twiddles[5];
+        g *= twiddles[6];
+        h *= twiddles[7];
+
+        unsigned j = i << 3;
+        output[j + 0] = a + e;
+        output[j + 1] = b + f;
+        output[j + 2] = c + g;
+        output[j + 3] = d + h;
+        output[j + 4] = a - e;
+        output[j + 5] = b - f;
+        output[j + 6] = c - g;
+        output[j + 7] = d - h;
+    }
+}
+
+void mufft_forward_half_radix8_p1_c(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples)
+{
+    cfloat *output = output_;
+    const cfloat *input = input_;
+    (void)twiddles;
+    (void)p;
+
+    unsigned octa_samples = samples >> 3;
+    for (unsigned i = 0; i < octa_samples; i++)
+    {
+        cfloat a = input[i];
+        cfloat b = input[i + octa_samples];
+        cfloat c = input[i + 2 * octa_samples];
+        cfloat d = input[i + 3 * octa_samples];
+
+        cfloat r0 = a; // 0O + 0
+        cfloat r1 = a; // 0O + 1
+        cfloat r2 = b; // 2O + 0
+        cfloat r3 = b; // 2O + 1
+        cfloat r4 = c; // 4O + 0
+        cfloat r5 = c; // 4O + 1
+        cfloat r6 = d; // 60 + 0
+        cfloat r7 = d; // 6O + 1
+
+        // p == 2 twiddles
+        r5 *= twiddles[2];
+        r7 *= twiddles[2];
+
+        a = r0 + r4; // 0O + 0
+        b = r1 + r5; // 0O + 1
+        c = r0 - r4; // 00 + 2
+        d = r1 - r5; // O0 + 3
+        cfloat e = r2 + r6; // 4O + 0
+        cfloat f = r3 + r7; // 4O + 1
+        cfloat g = r2 - r6; // 4O + 2
+        cfloat h = r3 - r7; // 4O + 3
 
         // p == 4 twiddles
         e *= twiddles[4];

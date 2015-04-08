@@ -198,6 +198,37 @@ void MANGLE(mufft_radix2_p1)(void *output_, const void *input_,
     }
 }
 
+void MANGLE(mufft_radix2_half_p1)(void *output_, const void *input_,
+        const cfloat *twiddles, unsigned p, unsigned samples)
+{
+    cfloat *output = output_;
+    const cfloat *input = input_;
+    (void)twiddles;
+    (void)p;
+
+    unsigned half_samples = samples >> 1;
+    for (unsigned i = 0; i < half_samples; i += VSIZE)
+    {
+        MM a = load_ps(&input[i]);
+
+        MM r0 = a;
+        MM r1 = a;
+        a = unpacklo_pd(r0, r1);
+        MM b = unpackhi_pd(r0, r1);
+#if VSIZE == 4
+        r0 = _mm256_permute2f128_ps(a, b, (2 << 4) | (0 << 0));
+        r1 = _mm256_permute2f128_ps(a, b, (3 << 4) | (1 << 0));
+#else
+        r0 = a;
+        r1 = b;
+#endif
+
+        unsigned j = i << 1;
+        store_ps(&output[j + 0 * VSIZE], r0);
+        store_ps(&output[j + 1 * VSIZE], r1);
+    }
+}
+
 #if VSIZE == 4
 #define RADIX2_P2_END \
     a = _mm256_permute2f128_ps(r0, r1, (2 << 4) | (0 << 0)); \
@@ -292,15 +323,7 @@ void MANGLE(mufft_ ## direction ## _radix4_p1)(void *output_, const void *input_
  \
     for (unsigned i = 0; i < quarter_samples; i += VSIZE) \
     { \
-        MM a = load_ps(&input[i]); \
-        MM b = load_ps(&input[i + quarter_samples]); \
-        MM c = load_ps(&input[i + 2 * quarter_samples]); \
-        MM d = load_ps(&input[i + 3 * quarter_samples]); \
- \
-        MM r0 = add_ps(a, c); \
-        MM r1 = sub_ps(a, c); \
-        MM r2 = add_ps(b, d); \
-        MM r3 = sub_ps(b, d); \
+        RADIX4_LOAD_FIRST_BUTTERFLY; \
         r3 = xor_ps(permute_ps(r3, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
  \
         MM o0 = add_ps(r0, r2); \
@@ -321,8 +344,30 @@ void MANGLE(mufft_ ## direction ## _radix4_p1)(void *output_, const void *input_
         store_ps(&output[j + 3 * VSIZE], o3); \
     } \
 }
+
+#undef RADIX4_LOAD_FIRST_BUTTERFLY
+#define RADIX4_LOAD_FIRST_BUTTERFLY \
+        MM a = load_ps(&input[i]); \
+        MM b = load_ps(&input[i + quarter_samples]); \
+        MM c = load_ps(&input[i + 2 * quarter_samples]); \
+        MM d = load_ps(&input[i + 3 * quarter_samples]); \
+ \
+        MM r0 = add_ps(a, c); \
+        MM r1 = sub_ps(a, c); \
+        MM r2 = add_ps(b, d); \
+        MM r3 = sub_ps(b, d)
 RADIX4_P1(forward, 0.0f, -0.0f)
 RADIX4_P1(inverse, -0.0f, 0.0f)
+#undef RADIX4_LOAD_FIRST_BUTTERFLY
+#define RADIX4_LOAD_FIRST_BUTTERFLY \
+        MM a = load_ps(&input[i]); \
+        MM b = load_ps(&input[i + quarter_samples]); \
+ \
+        MM r0 = a; \
+        MM r1 = a; \
+        MM r2 = b; \
+        MM r3 = b
+RADIX4_P1(forward_half, 0.0f, -0.0f)
 
 void MANGLE(mufft_radix4_generic)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)
@@ -407,23 +452,7 @@ void MANGLE(mufft_ ## direction ## _radix8_p1)(void *output_, const void *input_
     unsigned octa_samples = samples >> 3; \
     for (unsigned i = 0; i < octa_samples; i += VSIZE) \
     { \
-        MM a = load_ps(&input[i]); \
-        MM b = load_ps(&input[i + octa_samples]); \
-        MM c = load_ps(&input[i + 2 * octa_samples]); \
-        MM d = load_ps(&input[i + 3 * octa_samples]); \
-        MM e = load_ps(&input[i + 4 * octa_samples]); \
-        MM f = load_ps(&input[i + 5 * octa_samples]); \
-        MM g = load_ps(&input[i + 6 * octa_samples]); \
-        MM h = load_ps(&input[i + 7 * octa_samples]); \
- \
-        MM r0 = add_ps(a, e); \
-        MM r1 = sub_ps(a, e); \
-        MM r2 = add_ps(b, f); \
-        MM r3 = sub_ps(b, f); \
-        MM r4 = add_ps(c, g); \
-        MM r5 = sub_ps(c, g); \
-        MM r6 = add_ps(d, h); \
-        MM r7 = sub_ps(d, h); \
+        RADIX8_LOAD_FIRST_BUTTERFLY; \
         r5 = xor_ps(permute_ps(r5, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
         r7 = xor_ps(permute_ps(r7, _MM_SHUFFLE(2, 3, 0, 1)), flip_signs); \
  \
@@ -470,8 +499,45 @@ void MANGLE(mufft_ ## direction ## _radix8_p1)(void *output_, const void *input_
         store_ps(&output[j + 7 * VSIZE], o7); \
     } \
 }
+
+#undef RADIX8_LOAD_FIRST_BUTTERFLY
+#define RADIX8_LOAD_FIRST_BUTTERFLY \
+        MM a = load_ps(&input[i]); \
+        MM b = load_ps(&input[i + octa_samples]); \
+        MM c = load_ps(&input[i + 2 * octa_samples]); \
+        MM d = load_ps(&input[i + 3 * octa_samples]); \
+        MM e = load_ps(&input[i + 4 * octa_samples]); \
+        MM f = load_ps(&input[i + 5 * octa_samples]); \
+        MM g = load_ps(&input[i + 6 * octa_samples]); \
+        MM h = load_ps(&input[i + 7 * octa_samples]); \
+ \
+        MM r0 = add_ps(a, e); \
+        MM r1 = sub_ps(a, e); \
+        MM r2 = add_ps(b, f); \
+        MM r3 = sub_ps(b, f); \
+        MM r4 = add_ps(c, g); \
+        MM r5 = sub_ps(c, g); \
+        MM r6 = add_ps(d, h); \
+        MM r7 = sub_ps(d, h)
 RADIX8_P1(forward, 0.0f, -0.0f, -M_SQRT_2)
 RADIX8_P1(inverse, -0.0f, +0.0f, +M_SQRT_2)
+#undef RADIX8_LOAD_FIRST_BUTTERFLY
+#define RADIX8_LOAD_FIRST_BUTTERFLY \
+        MM a = load_ps(&input[i]); \
+        MM b = load_ps(&input[i + octa_samples]); \
+        MM c = load_ps(&input[i + 2 * octa_samples]); \
+        MM d = load_ps(&input[i + 3 * octa_samples]); \
+        MM e, f, g, h; \
+ \
+        MM r0 = a; \
+        MM r1 = a; \
+        MM r2 = b; \
+        MM r3 = b; \
+        MM r4 = c; \
+        MM r5 = c; \
+        MM r6 = d; \
+        MM r7 = d
+RADIX8_P1(forward_half, 0.0f, -0.0f, -M_SQRT_2)
 
 void MANGLE(mufft_radix8_generic)(void *output_, const void *input_,
         const cfloat *twiddles, unsigned p, unsigned samples)

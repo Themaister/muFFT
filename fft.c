@@ -142,12 +142,18 @@ struct fft_r2c_resolve_step fft_r2c_resolve_table[] = {
 
 static const struct fft_step_1d fft_1d_table[] = {
 #define STAMP_CPU_1D(arch, ext, min_x) \
-    { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+    { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD | MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF, \
         .func = mufft_forward_radix8_p1_ ## ext, .minimum_elements = 8 * min_x, .radix = 8, .fixed_p = 1, .minimum_p = -1u }, \
-    { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
+    { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD | MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF, \
         .func = mufft_forward_radix4_p1_ ## ext, .minimum_elements = 4 * min_x, .radix = 4, .fixed_p = 1, .minimum_p = -1u }, \
-    { .flags = arch | MUFFT_FLAG_DIRECTION_ANY, \
+    { .flags = arch | MUFFT_FLAG_DIRECTION_ANY | MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF, \
         .func = mufft_radix2_p1_ ## ext, .minimum_elements = 2 * min_x, .radix = 2, .fixed_p = 1, .minimum_p = -1u }, \
+    { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD | MUFFT_FLAG_ZERO_PAD_UPPER_HALF, \
+        .func = mufft_forward_half_radix8_p1_ ## ext, .minimum_elements = 8 * min_x, .radix = 8, .fixed_p = 1, .minimum_p = -1u }, \
+    { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD | MUFFT_FLAG_ZERO_PAD_UPPER_HALF, \
+        .func = mufft_forward_half_radix4_p1_ ## ext, .minimum_elements = 4 * min_x, .radix = 4, .fixed_p = 1, .minimum_p = -1u }, \
+    { .flags = arch | MUFFT_FLAG_DIRECTION_ANY | MUFFT_FLAG_ZERO_PAD_UPPER_HALF, \
+        .func = mufft_radix2_half_p1_ ## ext, .minimum_elements = 2 * min_x, .radix = 2, .fixed_p = 1, .minimum_p = -1u }, \
     { .flags = arch | MUFFT_FLAG_DIRECTION_FORWARD, \
         .func = mufft_forward_radix2_p2_ ## ext, .minimum_elements = 2 * min_x, .radix = 2, .fixed_p = 2, .minimum_p = -1u }, \
     { .flags = arch | MUFFT_FLAG_DIRECTION_INVERSE, \
@@ -256,8 +262,11 @@ static bool build_plan_1d(struct mufft_step_1d **steps, unsigned *num_steps, uns
             step_flags |= MUFFT_FLAG_DIRECTION_INVERSE;
             break;
     }
+
     // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
     step_flags |= MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    step_flags |= (flags & MUFFT_FLAG_ZERO_PAD_UPPER_HALF) != 0 ?
+        MUFFT_FLAG_ZERO_PAD_UPPER_HALF : MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF;
 
     while (radix > 1)
     {

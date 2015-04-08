@@ -37,9 +37,13 @@ typedef void (*mufft_r2c_resolve_func)(cfloat *output, const cfloat *input, cons
     FFT_RESOLVE_FUNC(resolve_r2c, arch) \
     FFT_RESOLVE_FUNC(resolve_r2c_full, arch) \
     FFT_RESOLVE_FUNC(resolve_c2r, arch) \
-    FFT_1D_FUNC(radix2_p1, arch) \
     FFT_1D_FUNC(forward_radix8_p1, arch) \
     FFT_1D_FUNC(forward_radix4_p1, arch) \
+    FFT_1D_FUNC(radix2_p1, arch) \
+    FFT_1D_FUNC(forward_radix2_p2, arch) \
+    FFT_1D_FUNC(radix2_half_p1, arch) \
+    FFT_1D_FUNC(forward_half_radix8_p1, arch) \
+    FFT_1D_FUNC(forward_half_radix4_p1, arch) \
     FFT_1D_FUNC(forward_radix2_p2, arch) \
     FFT_1D_FUNC(inverse_radix8_p1, arch) \
     FFT_1D_FUNC(inverse_radix4_p1, arch) \
@@ -72,6 +76,7 @@ DECLARE_FFT_CPU(c)
 
 #define MUFFT_FLAG_R2C (1 << 17)
 #define MUFFT_FLAG_C2R (1 << 18)
+#define MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF (1 << 19)
 
 #ifdef MUFFT_DEBUG
 #define mufft_assert(x) do { if (!(x)) { abort(); } } while(0)
