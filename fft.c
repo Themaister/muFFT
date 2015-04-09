@@ -315,7 +315,7 @@ static bool build_plan_1d(struct mufft_step_1d **steps, unsigned *num_steps, uns
     }
 
     // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
-    step_flags |= MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    step_flags |= mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
     step_flags |= (flags & MUFFT_FLAG_ZERO_PAD_UPPER_HALF) != 0 ?
         MUFFT_FLAG_ZERO_PAD_UPPER_HALF : MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF;
 
@@ -438,7 +438,7 @@ mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags)
     }
 
     // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
-    unsigned resolve_flags = MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    unsigned resolve_flags = mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
     resolve_flags |= (flags & MUFFT_FLAG_FULL_R2C) != 0 ?
         MUFFT_FLAG_FULL_R2C : MUFFT_FLAG_R2C;
 
@@ -492,7 +492,7 @@ mufft_plan_1d *mufft_create_plan_1d_c2r(unsigned N, unsigned flags)
     }
 
     // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
-    unsigned resolve_flags = MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    unsigned resolve_flags = mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
     resolve_flags |= MUFFT_FLAG_C2R;
 
     for (unsigned i = 0; i < ARRAY_SIZE(fft_r2c_resolve_table); i++)
@@ -520,7 +520,7 @@ error:
 
 mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned method)
 {
-    unsigned convolve_flags = MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    unsigned convolve_flags = mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
 
     if ((N & (N - 1)) != 0 || N == 1)
     {
