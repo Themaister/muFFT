@@ -22,8 +22,8 @@ It focuses particularly on linear convolution for audio applications and being o
    with optimizations for SSE, SSE3 and AVX-256 currently implemented.
    ARMv7 and ARMv8 NEON optimizations are expected to be implemented soon.
  - Radix-2, radix-4 and radix-8 butterfly implementations.
- - Input and output does not have to be reordered, as is sometimes the case with FFT algorithms.   muFFT implements the Stockham autosort algorithm to avoid any explicit permutation of
-   FFT coefficients.
+ - Input and output does not have to be reordered, as is sometimes the case with FFT algorithms.
+   muFFT implements the Stockham autosort algorithm to avoid any explicit permutation of FFT coefficients.
  - Detects SIMD support for your hardware in runtime.
    Same muFFT binary can support wide ranges of hardware feature sets.
 
@@ -43,7 +43,9 @@ C99 `complex float` from `<complex.h>` and C++ `std::complex<float>` from `<comp
 muFFT is very performant and is competitive with highly optimized libraries like FFTW3 and FFmpeg/libavcodec FFT on tested hardware.
 See [Benchmark](#benchmark) for how to run your own benchmarks.
 
-muFFT is designed with moderate size FFTs in mind. Very large FFTs which don't fit in cache could be better optimized by designing for cache utilization and tiny FFTs (N = 2, 4, 8) don't have special handcoded vectorized transforms.
+muFFT is designed with moderate size FFTs in mind.
+Very large FFTs which don't fit in cache could be better optimized by designing for cache utilization
+and tiny FFTs (N = 2, 4, 8) don't have special handcoded vectorized transforms.
 
 ## License
 
@@ -57,14 +59,15 @@ and not for distribution.
 
 ## Documentation
 
-The public muFFT API is documented with doxygen. Run `doxygen` or `make docs` to generate documentation.
-Doxygen 1.8.3 is required.
+The public muFFT API is documented with doxygen.
+Run `doxygen` or `make docs` to generate documentation. Doxygen 1.8.3 is required.
 
 After running Doxygen, documents are found in `docs/index.html`.
 
 ## Sample code
 
-There is currently no dedicated sample code for muFFT. See [test.c](@test) for reference on how to use the API.
+There is currently no dedicated sample code for muFFT. See `test.c` and the documentation for reference on how to use the API.
+The various test routines flex most of the API. It it also a good way to see how the API calls match up to equivalent FFTW3 routines.
 
 ## Unit tests
 

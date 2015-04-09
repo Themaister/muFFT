@@ -19,41 +19,69 @@
 #ifndef MUFFT_INTERNAL_H__
 #define MUFFT_INTERNAL_H__
 
+/// @file fft_internal.h muFFT internal helper functions
+
 #include "fft.h"
 #include <math.h>
 #include <complex.h>
 
 #ifndef M_PI
+/// Portable definition of M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 #ifndef M_SQRT1_2
+/// Portable definition of M_SQRT1_2
 #define M_SQRT1_2 0.707106781186547524401
 #endif
 
+/// Default alignment for \ref mufft_alloc
 #define MUFFT_ALIGNMENT 64
+
+/// Helper to swap two complex float pointers
 #define SWAP(a, b) do { cfloat *tmp = b; b = a; a = tmp; } while(0)
+
+/// Helper macro to get number of elements in an array.
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 #undef I
+/// Portable definition of the imaginary constant sqrt(-1).
 #define I _Complex_I
 
+/// Internal short definition of C99 complex float
 typedef complex float cfloat;
+
+/// 1D/horizontal FFT routine signature
 typedef void (*mufft_1d_func)(void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input,
         const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples);
+
+/// 2D/vertical FFT routine signature
 typedef void (*mufft_2d_func)(void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input,
         const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
+/// Real-to-complex and complex-to-real resolve routine signature
 typedef void (*mufft_r2c_resolve_func)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned samples);
+
+/// Vector complex multiply routine signature
 typedef void (*mufft_convolve_func)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b,
         float normalization, unsigned samples);
 
+/// Helper macro to mangle function signatures for specific SIMD instruction sets
 #define MANGLE(name, arch) mufft_ ## name ## _ ## arch
+
+/// Declares a mangled complex multiply function
 #define FFT_CONVOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b, float normalization, unsigned samples);
+
+/// Declares a mangled C2R-R2C resolve function
 #define FFT_RESOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned samples);
+
+/// Declares a mangled 1D FFT function
 #define FFT_1D_FUNC(name, arch) void MANGLE(name, arch) (void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples);
+
+/// Declared a mangled 2D FFT function
 #define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
+/// Declares all available routines for a specific SIMD instruction set
 #define DECLARE_FFT_CPU(arch) \
     FFT_CONVOLVE_FUNC(convolve, arch) \
     FFT_RESOLVE_FUNC(resolve_r2c, arch) \
@@ -87,25 +115,37 @@ DECLARE_FFT_CPU(sse3)
 DECLARE_FFT_CPU(sse)
 DECLARE_FFT_CPU(c)
 
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_MASK_CPU MUFFT_FLAG_CPU_NO_SIMD
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_CPU_AVX MUFFT_FLAG_CPU_NO_AVX
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_CPU_SSE3 MUFFT_FLAG_CPU_NO_SSE3
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_CPU_SSE MUFFT_FLAG_CPU_NO_SSE
 
 /// \brief Gets a mask of all relevant SIMD features the running CPU supports.
 unsigned mufft_get_cpu_flags(void);
 
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_DIRECTION_INVERSE (1 << 24)
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_DIRECTION_FORWARD (1 << 25)
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_DIRECTION_ANY 0
 
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_R2C (1 << 26)
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_C2R (1 << 27)
+/// Internal flag used for choosing FFT routines
 #define MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF (1 << 28)
 
 #ifdef MUFFT_DEBUG
+/// Assert macro which doesn't rely on NDEBUG not being set.
 #define mufft_assert(x) do { if (!(x)) { abort(); } } while(0)
 #else
+/// Assert macro which doesn't rely on NDEBUG not being set.
 #define mufft_assert(x) ((void)0)
 #endif
 

@@ -25,11 +25,16 @@ extern "C" {
 
 #include <stddef.h>
 
+/// @file fft.h muFFT public API
+
 #if __STDC_VERSION__ >= 199901L
+/// Portable variant of C99 restrict keyword
 #define MUFFT_RESTRICT restrict
 #else
+/// Portable variant of C99 restrict keyword
 #define MUFFT_RESTRICT
 #endif
+
 
 /// \weakgroup muFFT muFFT public API
 /// @{
@@ -165,7 +170,7 @@ mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned met
 /// \brief Applies forward FFT of either first or second input block.
 /// 
 /// When doing block-based overlap-add convolution with FFTs the filter generally stays constant over many transforms.
-/// We can to the forward transform of the filter input once and cache the FFT of the filter. Only the FFT of the input blocks have to be performed in this case.
+/// We can do the forward transform of the filter input once and cache the FFT of the filter. Only the FFT of the input blocks have to be performed in this case.
 ///
 /// @param plan Convolution instance
 /// @param block Which block to forward FFT transform. \ref MUFFT_CONV_BLOCK_FIRST or \ref MUFFT_CONV_BLOCK_SECOND are accepted. Which input is first and second is arbitrary and up to the API user.
