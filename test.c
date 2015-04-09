@@ -381,8 +381,13 @@ int main(void)
     {
         for (unsigned flags = 0; flags < 8; flags++)
         {
+            printf("Testing 1D forward transform size %u, flags = %u.\n", N, flags);
             test_fft_1d(N, -1, flags);
+            printf("    ... Passed\n");
+
+            printf("Testing 1D inverse transform size %u, flags = %u.\n", N, flags);
             test_fft_1d(N, +1, flags);
+            printf("    ... Passed\n");
         }
     }
 
@@ -390,9 +395,17 @@ int main(void)
     {
         for (unsigned flags = 0; flags < 8; flags++)
         {
+            printf("Testing 1D real-to-complex transform size %u, flags = %u.\n", N, flags);
             test_fft_1d_r2c(N, flags);
+            printf("    ... Passed\n");
+
+            printf("Testing 1D zero-padded real-to-complex transform size %u, flags = %u.\n", N, flags);
             test_fft_1d_r2c_half(N, flags);
+            printf("    ... Passed\n");
+
+            printf("Testing 1D complex-to-real transform size %u, flags = %u.\n", N, flags);
             test_fft_1d_c2r(N, flags);
+            printf("    ... Passed\n");
         }
     }
 
@@ -400,8 +413,13 @@ int main(void)
     {
         for (unsigned flags = 0; flags < 8; flags++)
         {
+            printf("Testing 1D convolution transform size %u, flags = %u.\n", N, flags);
             test_conv(N, flags);
+            printf("    ... Passed\n");
+
+            printf("Testing 1D convolution transform size %u, flags = %u.\n", N, flags);
             test_conv_stereo(N, flags);
+            printf("    ... Passed\n");
         }
     }
 
@@ -411,8 +429,13 @@ int main(void)
         {
             for (unsigned flags = 0; flags < 8; flags++)
             {
+                printf("Testing 2D forward transform size %u-by-%u, flags = %u.\n", Nx, Ny, flags);
                 test_fft_2d(Nx, Ny, -1, flags);
+                printf("    ... Passed\n");
+
+                printf("Testing 2D inverse transform size %u-by-%u, flags = %u.\n", Nx, Ny, flags);
                 test_fft_2d(Nx, Ny, +1, flags);
+                printf("    ... Passed\n");
             }
         }
     }
