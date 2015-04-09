@@ -11,6 +11,8 @@ else ifneq ($(findstring win,$(shell uname -a)),)
 endif
 endif
 
+CP := cp
+
 CFLAGS += -std=gnu99 -Wall -Wextra
 LDFLAGS += -lm -Wl,-no-undefined
 
@@ -115,9 +117,9 @@ DEPS := $(OBJECTS_SHARED:.o=.d) $(OBJECTS_STATIC:.o=.d) $(OBJECTS_TEST:.o=.d)
 
 all: static shared
 
-static: $(TARGET_OUT_STATIC)
+static: $(TARGET_STATIC)
 
-shared: $(TARGET_OUT_SHARED)
+shared: $(TARGET_SHARED)
 
 test: $(TARGET_TEST)
 
@@ -130,6 +132,12 @@ $(TARGET_TEST): static $(OBJECTS_TEST)
 
 $(TARGET_BENCH): static $(OBJECTS_BENCH)
 	$(CC) -o $@ $(OBJECTS_BENCH) $(TARGET_OUT_STATIC) $(shell pkg-config fftw3f --libs) $(LDFLAGS)
+
+$(TARGET_SHARED): $(TARGET_OUT_SHARED)
+	$(CP) $< $@
+
+$(TARGET_STATIC): $(TARGET_OUT_STATIC)
+	$(CP) $< $@
 
 $(TARGET_OUT_SHARED): $(OBJECTS_SHARED)
 	@mkdir -p $(dir $@)
