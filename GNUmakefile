@@ -11,7 +11,7 @@ ifeq ($(PLATFORM),)
    endif
 endif
 
-CFLAGS += -std=gnu99 -Wall -Wextra -pedantic
+CFLAGS += -std=gnu99 -Wall -Wextra
 LDFLAGS += -lm -Wl,-no-undefined
 
 ifeq ($(PLATFORM),win)
