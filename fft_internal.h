@@ -39,20 +39,20 @@
 #define I _Complex_I
 
 typedef complex float cfloat;
-typedef void (*mufft_1d_func)(void *output, const void *input,
-        const cfloat *twiddles, unsigned p, unsigned samples);
-typedef void (*mufft_2d_func)(void *output, const void *input,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
+typedef void (*mufft_1d_func)(void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples);
+typedef void (*mufft_2d_func)(void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
-typedef void (*mufft_r2c_resolve_func)(cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
-typedef void (*mufft_convolve_func)(cfloat *output, const cfloat *a, const cfloat *b,
+typedef void (*mufft_r2c_resolve_func)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned samples);
+typedef void (*mufft_convolve_func)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b,
         float normalization, unsigned samples);
 
 #define MANGLE(name, arch) mufft_ ## name ## _ ## arch
-#define FFT_CONVOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat *output, const cfloat *a, const cfloat *b, float normalization, unsigned samples);
-#define FFT_RESOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat *output, const cfloat *input, const cfloat *twiddles, unsigned samples);
-#define FFT_1D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples);
-#define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *input, const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
+#define FFT_CONVOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b, float normalization, unsigned samples);
+#define FFT_RESOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned samples);
+#define FFT_1D_FUNC(name, arch) void MANGLE(name, arch) (void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples);
+#define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
 
 #define DECLARE_FFT_CPU(arch) \
     FFT_CONVOLVE_FUNC(convolve, arch) \

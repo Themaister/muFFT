@@ -20,7 +20,7 @@
 #include <math.h>
 #include <complex.h>
 
-void mufft_convolve_c(cfloat *output, const cfloat *a, const cfloat *b,
+void mufft_convolve_c(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b,
         float normalization, unsigned samples)
 {
     for (unsigned i = 0; i < samples; i++)
@@ -29,8 +29,8 @@ void mufft_convolve_c(cfloat *output, const cfloat *a, const cfloat *b,
     }
 }
 
-void mufft_resolve_c2r_c(cfloat *output, const cfloat *input,
-        const cfloat *twiddles, unsigned samples)
+void mufft_resolve_c2r_c(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned samples)
 {
     for (unsigned i = 0; i < samples; i++)
     {
@@ -40,8 +40,8 @@ void mufft_resolve_c2r_c(cfloat *output, const cfloat *input,
     }
 }
 
-void mufft_resolve_r2c_c(cfloat *output, const cfloat *input,
-        const cfloat *twiddles, unsigned samples)
+void mufft_resolve_r2c_c(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned samples)
 {
     cfloat fe = crealf(input[0]);
     cfloat fo = cimagf(input[0]);
@@ -58,8 +58,8 @@ void mufft_resolve_r2c_c(cfloat *output, const cfloat *input,
     }
 }
 
-void mufft_resolve_r2c_full_c(cfloat *output, const cfloat *input,
-        const cfloat *twiddles, unsigned samples)
+void mufft_resolve_r2c_full_c(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned samples)
 {
     cfloat fe = crealf(input[0]);
     cfloat fo = cimagf(input[0]);
@@ -77,8 +77,8 @@ void mufft_resolve_r2c_full_c(cfloat *output, const cfloat *input,
     }
 }
 
-void mufft_radix2_p1_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_radix2_p1_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -97,8 +97,8 @@ void mufft_radix2_p1_c(void *output_, const void *input_,
     }
 }
 
-void mufft_radix2_half_p1_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_radix2_half_p1_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -117,8 +117,8 @@ void mufft_radix2_half_p1_c(void *output_, const void *input_,
     }
 }
 
-void mufft_forward_radix2_p2_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_forward_radix2_p2_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -138,14 +138,14 @@ void mufft_forward_radix2_p2_c(void *output_, const void *input_,
     }
 }
 
-void mufft_inverse_radix2_p2_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_inverse_radix2_p2_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     mufft_forward_radix2_p2_c(output_, input_, twiddles, p, samples);
 }
 
-void mufft_radix2_generic_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_radix2_generic_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -163,8 +163,8 @@ void mufft_radix2_generic_c(void *output_, const void *input_,
     }
 }
 
-void mufft_forward_radix4_p1_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_forward_radix4_p1_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -193,8 +193,8 @@ void mufft_forward_radix4_p1_c(void *output_, const void *input_,
     }
 }
 
-void mufft_forward_half_radix4_p1_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_forward_half_radix4_p1_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -221,14 +221,14 @@ void mufft_forward_half_radix4_p1_c(void *output_, const void *input_,
     }
 }
 
-void mufft_inverse_radix4_p1_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_inverse_radix4_p1_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     mufft_forward_radix4_p1_c(output_, input_, twiddles, p, samples);
 }
 
-void mufft_radix4_generic_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_radix4_generic_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -266,8 +266,8 @@ void mufft_radix4_generic_c(void *output_, const void *input_,
     }
 }
 
-void mufft_forward_radix8_p1_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_forward_radix8_p1_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -326,8 +326,8 @@ void mufft_forward_radix8_p1_c(void *output_, const void *input_,
     }
 }
 
-void mufft_forward_half_radix8_p1_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_forward_half_radix8_p1_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -382,14 +382,14 @@ void mufft_forward_half_radix8_p1_c(void *output_, const void *input_,
     }
 }
 
-void mufft_inverse_radix8_p1_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_inverse_radix8_p1_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     mufft_forward_radix8_p1_c(output_, input_, twiddles, p, samples);
 }
 
-void mufft_radix8_generic_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void mufft_radix8_generic_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -448,8 +448,8 @@ void mufft_radix8_generic_c(void *output_, const void *input_,
     }
 }
 
-void mufft_radix2_p1_vert_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void mufft_radix2_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -476,8 +476,8 @@ void mufft_radix2_p1_vert_c(void *output_, const void *input_,
     }
 }
 
-void mufft_radix2_generic_vert_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void mufft_radix2_generic_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -506,8 +506,8 @@ void mufft_radix2_generic_vert_c(void *output_, const void *input_,
     }
 }
 
-void mufft_forward_radix4_p1_vert_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void mufft_forward_radix4_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -548,14 +548,14 @@ void mufft_forward_radix4_p1_vert_c(void *output_, const void *input_,
     }
 }
 
-void mufft_inverse_radix4_p1_vert_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void mufft_inverse_radix4_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     mufft_forward_radix4_p1_vert_c(output_, input_, twiddles, p, samples_x, samples_y);
 }
 
-void mufft_radix4_generic_vert_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void mufft_radix4_generic_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -597,8 +597,8 @@ void mufft_radix4_generic_vert_c(void *output_, const void *input_,
     }
 }
 
-void mufft_forward_radix8_p1_vert_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void mufft_forward_radix8_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -660,14 +660,14 @@ void mufft_forward_radix8_p1_vert_c(void *output_, const void *input_,
     }
 }
 
-void mufft_inverse_radix8_p1_vert_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void mufft_inverse_radix8_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     mufft_forward_radix8_p1_vert_c(output_, input_, twiddles, p, samples_x, samples_y);
 }
 
-void mufft_radix8_generic_vert_c(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void mufft_radix8_generic_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;

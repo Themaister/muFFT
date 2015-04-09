@@ -690,7 +690,7 @@ void mufft_execute_conv_output(mufft_plan_conv *plan, void *output)
     mufft_execute_plan_1d(plan->output_plan, output, plan->conv_block);
 }
 
-void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
+void mufft_execute_plan_1d(mufft_plan_1d *plan, void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input)
 {
     const cfloat *pt = plan->twiddles;
     cfloat *out = output;
@@ -731,7 +731,7 @@ void mufft_execute_plan_1d(mufft_plan_1d *plan, void *output, const void *input)
     }
 }
 
-void mufft_execute_plan_2d(mufft_plan_2d *plan, void *output, const void *input_)
+void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input_)
 {
     const cfloat *ptx = plan->twiddles_x;
     const cfloat *pty = plan->twiddles_y;

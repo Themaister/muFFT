@@ -100,7 +100,7 @@ static inline MM cmul_ps(MM a, MM b)
     return addsub_ps(R0, R1);
 }
 
-void MANGLE(mufft_convolve)(cfloat *output, const cfloat *input_a, const cfloat *input_b,
+void MANGLE(mufft_convolve)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input_a, const cfloat * MUFFT_RESTRICT input_b,
         float normalization, unsigned samples)
 {
     const MM n = splat_const_complex(normalization, normalization);
@@ -113,8 +113,8 @@ void MANGLE(mufft_convolve)(cfloat *output, const cfloat *input_a, const cfloat 
     }
 }
 
-void MANGLE(mufft_resolve_c2r)(cfloat *output, const cfloat *input,
-        const cfloat *twiddles, unsigned samples)
+void MANGLE(mufft_resolve_c2r)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned samples)
 {
     const MM flip_signs = splat_const_complex(0.0f, -0.0f);
     for (unsigned i = 0; i < samples; i += VSIZE)
@@ -131,8 +131,8 @@ void MANGLE(mufft_resolve_c2r)(cfloat *output, const cfloat *input,
     }
 }
 
-void MANGLE(mufft_resolve_r2c_full)(cfloat *output, const cfloat *input,
-        const cfloat *twiddles, unsigned samples)
+void MANGLE(mufft_resolve_r2c_full)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned samples)
 {
     cfloat fe = crealf(input[0]);
     cfloat fo = cimagf(input[0]);
@@ -165,8 +165,8 @@ void MANGLE(mufft_resolve_r2c_full)(cfloat *output, const cfloat *input,
     }
 }
 
-void MANGLE(mufft_resolve_r2c)(cfloat *output, const cfloat *input,
-        const cfloat *twiddles, unsigned samples)
+void MANGLE(mufft_resolve_r2c)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned samples)
 {
     cfloat fe = crealf(input[0]);
     cfloat fo = cimagf(input[0]);
@@ -197,8 +197,8 @@ void MANGLE(mufft_resolve_r2c)(cfloat *output, const cfloat *input,
     }
 }
 
-void MANGLE(mufft_radix2_p1)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void MANGLE(mufft_radix2_p1)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -229,8 +229,8 @@ void MANGLE(mufft_radix2_p1)(void *output_, const void *input_,
     }
 }
 
-void MANGLE(mufft_radix2_half_p1)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void MANGLE(mufft_radix2_half_p1)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -271,8 +271,8 @@ void MANGLE(mufft_radix2_half_p1)(void *output_, const void *input_,
 #endif
 
 #define RADIX2_P2(direction, twiddle_r, twiddle_i) \
-void MANGLE(mufft_ ## direction ## _radix2_p2)(void *output_, const void *input_, \
-        const cfloat *twiddles, unsigned p, unsigned samples) \
+void MANGLE(mufft_ ## direction ## _radix2_p2)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_, \
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples) \
 { \
     cfloat *output = output_; \
     const cfloat *input = input_; \
@@ -300,8 +300,8 @@ void MANGLE(mufft_ ## direction ## _radix2_p2)(void *output_, const void *input_
 RADIX2_P2(forward, 0.0f, -0.0f)
 RADIX2_P2(inverse, -0.0f, 0.0f)
 
-void MANGLE(mufft_radix2_generic)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void MANGLE(mufft_radix2_generic)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -341,8 +341,8 @@ void MANGLE(mufft_radix2_generic)(void *output_, const void *input_,
 #endif
 
 #define RADIX4_P1(direction, twiddle_r, twiddle_i) \
-void MANGLE(mufft_ ## direction ## _radix4_p1)(void *output_, const void *input_, \
-        const cfloat *twiddles, unsigned p, unsigned samples) \
+void MANGLE(mufft_ ## direction ## _radix4_p1)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_, \
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples) \
 { \
     cfloat *output = output_; \
     const cfloat *input = input_; \
@@ -400,8 +400,8 @@ RADIX4_P1(inverse, -0.0f, 0.0f)
         MM r3 = b
 RADIX4_P1(forward_half, 0.0f, -0.0f)
 
-void MANGLE(mufft_radix4_generic)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void MANGLE(mufft_radix4_generic)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -468,8 +468,8 @@ void MANGLE(mufft_radix4_generic)(void *output_, const void *input_,
 #endif
 
 #define RADIX8_P1(direction, twiddle_r, twiddle_i, twiddle8) \
-void MANGLE(mufft_ ## direction ## _radix8_p1)(void *output_, const void *input_, \
-        const cfloat *twiddles, unsigned p, unsigned samples) \
+void MANGLE(mufft_ ## direction ## _radix8_p1)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_, \
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples) \
 { \
     cfloat *output = output_; \
     const cfloat *input = input_; \
@@ -570,8 +570,8 @@ RADIX8_P1(inverse, -0.0f, +0.0f, +M_SQRT1_2)
         MM r7 = d
 RADIX8_P1(forward_half, 0.0f, -0.0f, -M_SQRT1_2)
 
-void MANGLE(mufft_radix8_generic)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples)
+void MANGLE(mufft_radix8_generic)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -651,8 +651,8 @@ void MANGLE(mufft_radix8_generic)(void *output_, const void *input_,
 }
 
 
-void MANGLE(mufft_radix2_p1_vert)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void MANGLE(mufft_radix2_p1_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -679,8 +679,8 @@ void MANGLE(mufft_radix2_p1_vert)(void *output_, const void *input_,
     }
 }
 
-void MANGLE(mufft_radix2_generic_vert)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void MANGLE(mufft_radix2_generic_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -712,8 +712,8 @@ void MANGLE(mufft_radix2_generic_vert)(void *output_, const void *input_,
 }
 
 #define RADIX4_P1_VERT(direction, twiddle_r, twiddle_i) \
-void MANGLE(mufft_ ## direction ## _radix4_p1_vert)(void *output_, const void *input_, \
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y) \
+void MANGLE(mufft_ ## direction ## _radix4_p1_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_, \
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y) \
 { \
     cfloat *output = output_; \
     const cfloat *input = input_; \
@@ -755,8 +755,8 @@ void MANGLE(mufft_ ## direction ## _radix4_p1_vert)(void *output_, const void *i
 RADIX4_P1_VERT(forward, 0.0f, -0.0f)
 RADIX4_P1_VERT(inverse, -0.0f, 0.0f)
 
-void MANGLE(mufft_radix4_generic_vert)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void MANGLE(mufft_radix4_generic_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -802,8 +802,8 @@ void MANGLE(mufft_radix4_generic_vert)(void *output_, const void *input_,
 }
 
 #define RADIX8_P1_VERT(direction, twiddle_r, twiddle_i, twiddle8) \
-void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void *output_, const void *input_, \
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y) \
+void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_, \
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y) \
 { \
     cfloat *output = output_; \
     const cfloat *input = input_; \
@@ -876,8 +876,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void *output_, const void *i
 RADIX8_P1_VERT(forward, 0.0f, -0.0f, -M_SQRT1_2)
 RADIX8_P1_VERT(inverse, -0.0f, 0.0f, +M_SQRT1_2)
 
-void MANGLE(mufft_radix8_generic_vert)(void *output_, const void *input_,
-        const cfloat *twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+void MANGLE(mufft_radix8_generic_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
