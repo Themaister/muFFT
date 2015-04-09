@@ -64,6 +64,8 @@ After running Doxygen, documents are found in `docs/index.html`.
 
 ## Sample code
 
+There is currently no dedicated sample code for muFFT. See [test.c](@test) for reference on how to use the API.
+
 ## Unit tests
 
 All muFFT APIs have unit tests. muFFT output is verified against the FFTW library.
