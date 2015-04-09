@@ -55,11 +55,10 @@ extern "C" {
 #define MUFFT_FLAG_CPU_NO_SSE (1 << 2)
 /// The real-to-complex 1D transform will also output the redundant conjugate values X(N - k) = X(k)*.
 #define MUFFT_FLAG_FULL_R2C (1 << 16)
-/// @}
-
 /// The second/upper half of the input array is assumed to be 0 and will not be read and memory for the second half of the input array does not have to be allocated.
 /// This is mostly useful when you want to do zero-padded FFTs which are very common for convolution-type operations, see \ref MUFFT_CONV.
 #define MUFFT_FLAG_ZERO_PAD_UPPER_HALF (1 << 17)
+/// @}
 
 /// \addtogroup MUFFT_1D 1D real and complex FFT
 /// @{

@@ -93,12 +93,19 @@ struct mufft_plan_conv
     unsigned conv_multiply_n; ///< Count passed to mufft_plan_conv::convolve_func. Either N / 2 + 1 or N / 2 depending on the convolution method.
 };
 
+/// \brief Computes the twiddle factor exp(pi * I * direction * k / p)
 static cfloat twiddle(int direction, int k, int p)
 {
     double phase = (M_PI * direction * k) / p;
     return cos(phase) + I * sin(phase);
 }
 
+/// \brief Builds a table of twiddle factors.
+/// The table is built for a DIT transform with increasing butterfly strides.
+/// The table is suitable for any FFT radix.
+/// @param N Transform size
+/// @param direction Direction of transform. See \ref MUFFT_FORWARD and \ref MUFFT_INVERSE.
+/// @returns Newly allocated twiddle factor table.
 static cfloat *build_twiddles(unsigned N, int direction)
 {
     cfloat *twiddles = mufft_alloc(N * sizeof(cfloat));
@@ -121,44 +128,49 @@ static cfloat *build_twiddles(unsigned N, int direction)
     return twiddles;
 }
 
+/// ABI compatible base struct for \ref fft_step_1d and \ref fft_step_2d.
 struct fft_step_base
 {
-    void (*func)(void);
-    unsigned radix;
+    void (*func)(void); ///< Generic function pointer.
+    unsigned radix; ///< Radix of the FFT. 2, 4 or 8.
 };
 
+/// Represents a single step of the complete 1D/horizontal FFT with requirements on use.
 struct fft_step_1d
 {
-    mufft_1d_func func;
-    unsigned radix;
-    unsigned minimum_elements;
-    unsigned fixed_p;
-    unsigned minimum_p;
-    unsigned flags;
+    mufft_1d_func func; ///< Function pointer to a 1D partial FFT.
+    unsigned radix; ///< Radix of the FFT step. 2, 4 or 8.
+    unsigned minimum_elements; ///< Minimum transform size for which this function can be used.
+    unsigned fixed_p; ///< Non-zero if this can only be used with a fixed value for mufft_step_base::p.
+    unsigned minimum_p; ///< Minimum p-factor for which this can be used. Set to -1u if it can only be used with fft_step_1d::fixed_p.
+    unsigned flags; ///< Flags which determine under which conditions this function can be used.
 };
 
+/// Represents a single step of the complete 2D/vertical FFT with requirements on use.
 struct fft_step_2d
 {
-    mufft_2d_func func;
-    unsigned radix;
-    unsigned minimum_elements_x;
-    unsigned minimum_elements_y;
-    unsigned fixed_p;
-    unsigned minimum_p;
-    unsigned flags;
+    mufft_2d_func func; ///< Function pointer to a 1D partial FFT.
+    unsigned radix; ///< Radix of the FFT step. 2, 4 or 8.
+    unsigned minimum_elements_x; ///< Minimum horizontal transform size for which this function can be used.
+    unsigned minimum_elements_y; ///< Minimum vertical transform size for which this function can be used.
+    unsigned fixed_p; ///< Non-zero if this can only be used with a fixed value for mufft_step_base::p.
+    unsigned minimum_p; ///< Minimum p-factor for which this can be used. Set to -1u if it can only be used with fft_step_1d::fixed_p.
+    unsigned flags; ///< Flags which determine under which conditions this function can be used.
 };
 
+/// Represents a resolve step for real-to-complex transform or complex-to-real.
 struct fft_r2c_resolve_step
 {
-    mufft_r2c_resolve_func func;
-    unsigned minimum_elements;
-    unsigned flags;
+    mufft_r2c_resolve_func func; ///< Function pointer to a R2C/C2R resolve function.
+    unsigned minimum_elements; ///< Minimum transform size for which this function can be used.
+    unsigned flags; ///< Flags which determine under which conditions this function can be used.
 };
 
+/// Represents an array complex multiply routine.
 struct fft_convolve_step
 {
-    mufft_convolve_func func;
-    unsigned flags;
+    mufft_convolve_func func; ///< Function pointer to a complex multiply routine.
+    unsigned flags; ///< Flags which determine under which conditions this function can be used.
 };
 
 static const struct fft_convolve_step convolve_table[] = {
@@ -269,6 +281,7 @@ static const struct fft_step_2d fft_2d_table[] = {
     STAMP_CPU_2D(0, c, 1),
 };
 
+/// \brief Adds a new FFT step to either \ref mufft_step_1d or \ref mufft_step_2d.
 static bool add_step(struct mufft_step_base **steps, unsigned *num_steps,
         const struct fft_step_base *step, unsigned p)
 {
@@ -303,6 +316,7 @@ static bool add_step(struct mufft_step_base **steps, unsigned *num_steps,
     return true;
 }
 
+/// \brief Builds a plan for a horizontal transform.
 static bool build_plan_1d(struct mufft_step_1d **steps, unsigned *num_steps, unsigned N, int direction, unsigned flags)
 {
     unsigned radix = N;
@@ -359,6 +373,7 @@ static bool build_plan_1d(struct mufft_step_1d **steps, unsigned *num_steps, uns
     return true;
 }
 
+/// \brief Builds a plan for a vertical transform.
 static bool build_plan_2d(struct mufft_step_2d **steps, unsigned *num_steps, unsigned Nx, unsigned Ny, int direction, unsigned flags)
 {
     unsigned radix = Ny;

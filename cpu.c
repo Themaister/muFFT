@@ -27,6 +27,7 @@
 
 #ifdef MUFFT_HAVE_X86
 
+/// \brief Wrapper routine for x86 CPUID
 static void mufft_x86_cpuid(int func, int flags[4])
 {
     // On 32-bit with PIC we are not allowed to clobber the ebx register.
@@ -53,7 +54,8 @@ static void mufft_x86_cpuid(int func, int flags[4])
 #endif
 }
 
-// Only runs on i686 and above. Needs to be conditionally run.
+/// \brief Wrapper routine for x86 xgetbv
+/// Only runs on i686 and above. Needs to be conditionally run.
 static uint64_t mufft_xgetbv_x86(uint32_t idx)
 {
 #if defined(__GNUC__)

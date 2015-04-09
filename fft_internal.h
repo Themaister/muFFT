@@ -92,15 +92,16 @@ DECLARE_FFT_CPU(c)
 #define MUFFT_FLAG_CPU_SSE3 MUFFT_FLAG_CPU_NO_SSE3
 #define MUFFT_FLAG_CPU_SSE MUFFT_FLAG_CPU_NO_SSE
 
+/// \brief Gets a mask of all relevant SIMD features the running CPU supports.
 unsigned mufft_get_cpu_flags(void);
 
-#define MUFFT_FLAG_DIRECTION_INVERSE (1 << 16)
-#define MUFFT_FLAG_DIRECTION_FORWARD (1 << 17)
+#define MUFFT_FLAG_DIRECTION_INVERSE (1 << 24)
+#define MUFFT_FLAG_DIRECTION_FORWARD (1 << 25)
 #define MUFFT_FLAG_DIRECTION_ANY 0
 
-#define MUFFT_FLAG_R2C (1 << 17)
-#define MUFFT_FLAG_C2R (1 << 18)
-#define MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF (1 << 19)
+#define MUFFT_FLAG_R2C (1 << 26)
+#define MUFFT_FLAG_C2R (1 << 27)
+#define MUFFT_FLAG_NO_ZERO_PAD_UPPER_HALF (1 << 28)
 
 #ifdef MUFFT_DEBUG
 #define mufft_assert(x) do { if (!(x)) { abort(); } } while(0)
@@ -108,6 +109,7 @@ unsigned mufft_get_cpu_flags(void);
 #define mufft_assert(x) ((void)0)
 #endif
 
+/// Number of samples we need to properly pad an array. This should be equal to the widest SIMD instruction set supported by muFFT. Currently, this is AVX 256-bit which holds 4 complex floats.
 #define MUFFT_PADDING_COMPLEX_SAMPLES 4
 
 #endif
