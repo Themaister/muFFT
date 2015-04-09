@@ -441,5 +441,6 @@ int main(void)
     }
 
     fftwf_cleanup();
+    printf("All tests passed!\n");
 }
 

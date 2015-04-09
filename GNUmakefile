@@ -171,6 +171,9 @@ $(OBJDIR_STATIC)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD
 
+docs:
+	doxygen
+
 clean:
 	rm -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC) $(TARGET_TEST) $(TARGET_BENCH)
 	rm -rf $(OBJDIR_SHARED) $(OBJDIR_STATIC)
@@ -178,5 +181,5 @@ clean:
 clean-all:
 	rm -rf bin obj-shared obj-static
 
-.PHONY: all test shared static clean clean-all bench
+.PHONY: all docs test shared static clean clean-all bench
 
