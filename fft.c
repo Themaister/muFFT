@@ -22,69 +22,75 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
-#include <assert.h>
 
+/// ABI compatible struct for \ref mufft_step_1d and \ref mufft_step_2d.
 struct mufft_step_base
 {
-    void (*func)(void);
-    unsigned radix;
-    unsigned p;
-    unsigned twiddle_offset;
+    void (*func)(void); ///< Generic function pointer.
+    unsigned radix; ///< Radix of the FFT step. 2, 4 or 8.
+    unsigned p; ///< The current p factor of the FFT. Determines butterfly stride. It is equal to prev_step.p * prev_step.radix. Initial value is 1.
+    unsigned twiddle_offset; ///< Offset into twiddle factor table.
 };
 
+/// Represents a single step of a complete 1D/horizontal FFT.
 struct mufft_step_1d
 {
-    mufft_1d_func func;
-    unsigned radix;
-    unsigned p;
-    unsigned twiddle_offset;
+    mufft_1d_func func; ///< Function pointer to a 1D partial FFT.
+    unsigned radix; ///< Radix of the FFT step. 2, 4 or 8.
+    unsigned p; ///< The current p factor of the FFT. Determines butterfly stride. It is equal to prev_step.p * prev_step.radix. Initial value is 1.
+    unsigned twiddle_offset; ///< Offset into twiddle factor table.
 };
 
+/// Represents a single step of a 2D/vertical FFT.
 struct mufft_step_2d
 {
-    mufft_2d_func func;
-    unsigned radix;
-    unsigned p;
-    unsigned twiddle_offset;
+    mufft_2d_func func; ///< Function pointer to a 2D partial FFT.
+    unsigned radix; ///< Radix of the FFT step. 2, 4 or 8.
+    unsigned p; ///< The current p factor of the FFT. Determines butterfly stride. It is equal to prev_step.p * prev_step.radix. Initial value is 1.
+    unsigned twiddle_offset; ///< Offset into twiddle factor table.
 };
 
+/// Represents a complete plan for a 1D FFT.
 struct mufft_plan_1d
 {
-    struct mufft_step_1d *steps;
-    unsigned num_steps;
-    unsigned N;
+    struct mufft_step_1d *steps; ///< A list of steps to take to complete a full N-tap FFT.
+    unsigned num_steps; ///< Number of steps contained in mufft_plan_1d::steps.
+    unsigned N; ///< Size of the 1D transform.
 
-    cfloat *tmp_buffer;
-    cfloat *twiddles;
+    cfloat *tmp_buffer; ///< A temporary buffer used during intermediate steps of the FFT.
+    cfloat *twiddles; ///< Buffer holding twiddle factors used in the FFT.
 
-    mufft_r2c_resolve_func r2c_resolve;
-    mufft_r2c_resolve_func c2r_resolve;
-    cfloat *r2c_twiddles;
+    mufft_r2c_resolve_func r2c_resolve; ///< If non-NULL, a function to turn a N / 2 complex transform into a N-tap real transform.
+    mufft_r2c_resolve_func c2r_resolve; ///< If non-NULL, a function to turn a N real inverse transform into a N / 2 complex transform.
+    cfloat *r2c_twiddles; ///< Special twiddle factors used in mufft_plan_1d::r2c_resolve or mufft_plan_1d::c2r_resolve.
 };
 
+/// Represents a complete plan for a 2D FFT.
 struct mufft_plan_2d
 {
-    struct mufft_step_1d *steps_x;
-    unsigned num_steps_x;
-    struct mufft_step_2d *steps_y;
-    unsigned num_steps_y;
-    unsigned Nx, Ny;
+    struct mufft_step_1d *steps_x; ///< A list of steps to take to complete a full horizontal Nx-tap FFT.
+    unsigned num_steps_x; ///< Number of steps contained in mufft_plan_2d::steps_x.
+    struct mufft_step_2d *steps_y; ///< Number of steps to take to complete to full vertical Ny-tap FFT.
+    unsigned num_steps_y; ///< Number of steps contained in mufft_plan_2d::steps_y.
+    unsigned Nx; ///< Size of the horizontal transform.
+    unsigned Ny; ///< Size of the vertical transform.
 
-    cfloat *tmp_buffer;
-    cfloat *twiddles_x;
-    cfloat *twiddles_y;
+    cfloat *tmp_buffer; ///< A temporary buffer used during intermediate steps of the FFT.
+    cfloat *twiddles_x; ///< Buffer holding twiddle factors used in the horizontal FFT.
+    cfloat *twiddles_y; ///< Buffer holding twiddle factors used in the vertical FFT.
 };
 
+/// Represents a complete plan for a 1D fast convolution.
 struct mufft_plan_conv
 {
-    mufft_plan_1d *plans[2];
-    mufft_plan_1d *output_plan;
-    void *block[2];
-    void *conv_block;
-    float normalization;
+    mufft_plan_1d *plans[2]; ///< 1D FFT plans for first and second inputs.
+    mufft_plan_1d *output_plan; ///< 1D FFT plan for inverse FFT.
+    void *block[2]; ///< Buffer for FFT output of first and second inputs.
+    void *conv_block; ///< Buffer for the result of multiplying the two buffers in mufft_plan_conv::block.
+    float normalization; ///< Normalization factor 1 / N.
 
-    mufft_convolve_func convolve_func;
-    unsigned conv_multiply_n;
+    mufft_convolve_func convolve_func; ///< Function pointer to complex multiply the two buffers in mufft_plan_conv::block.
+    unsigned conv_multiply_n; ///< Count passed to mufft_plan_conv::convolve_func. Either N / 2 + 1 or N / 2 depending on the convolution method.
 };
 
 static cfloat twiddle(int direction, int k, int p)

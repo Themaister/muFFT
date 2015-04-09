@@ -58,7 +58,7 @@ extern "C" {
 /// @}
 
 /// The second/upper half of the input array is assumed to be 0 and will not be read and memory for the second half of the input array does not have to be allocated.
-/// This is mostly useful when you want to do zero-padded FFTs which are very common for convolution-type operations.
+/// This is mostly useful when you want to do zero-padded FFTs which are very common for convolution-type operations, see \ref MUFFT_CONV.
 #define MUFFT_FLAG_ZERO_PAD_UPPER_HALF (1 << 17)
 
 /// \addtogroup MUFFT_1D 1D real and complex FFT
@@ -179,7 +179,7 @@ void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void 
 ///
 /// @param plan Convolution instance
 /// @param output Output data. Must be aligned to a boundary which matches with the SIMD instruction set used by your hardware, typically 16 or 32 bytes. Use \ref MUFFT_MEMORY to allocate properly aligned memory. Depending on the convolution method used, the type of output is either treated as a complex array or real array of length N.
-void mufft_execute_conv_output(mufft_plan_conv *plan, void * MUFFT_RESTRICT output);
+void mufft_execute_conv_output(mufft_plan_conv *plan, void *output);
 
 /// \brief Free a previously allocated convolution plan obtained from \ref mufft_create_plan_conv.
 void mufft_free_plan_conv(mufft_plan_conv *plan);
