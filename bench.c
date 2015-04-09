@@ -416,8 +416,9 @@ int main(int argc, char *argv[])
         printf("\n1D benchmarks ...\n");
         for (unsigned N = 4; N <= 128 * 1024; N <<= 1)
         {
-            run_benchmark_1d(N, 400000000ull / N);
-            run_benchmark_1d_real(N, 400000000ull / N);
+            run_benchmark_1d(N, 400000000ull / (N + 16));
+            run_benchmark_1d_real(N, 400000000ull / (N + 16));
+            run_benchmark_conv(N, 400000000ull / (N + 16));
         }
 
         printf("\n2D benchmarks ...\n");
@@ -425,7 +426,7 @@ int main(int argc, char *argv[])
         {
             for (unsigned Nx = 4; Nx <= 1024; Nx <<= 1)
             {
-                run_benchmark_2d(Nx, Ny, 400000000ull / (Nx * Ny));
+                run_benchmark_2d(Nx, Ny, 400000000ull / (Nx * Ny + 16));
             }
         }
     }

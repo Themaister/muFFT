@@ -1,83 +1,88 @@
 ifeq ($(PLATFORM),)
-   PLATFORM = unix
-   ifeq ($(shell uname -a),)
-      PLATFORM = win
-   else ifneq ($(findstring MINGW,$(shell uname -a)),)
-      PLATFORM = win
-   else ifneq ($(findstring Darwin,$(shell uname -a)),)
-      PLATFORM = osx
-   else ifneq ($(findstring win,$(shell uname -a)),)
-      PLATFORM = win
-   endif
+	PLATFORM = unix
+	ifeq ($(shell uname -a),)
+	PLATFORM = win
+else ifneq ($(findstring MINGW,$(shell uname -a)),)
+	PLATFORM = win
+else ifneq ($(findstring Darwin,$(shell uname -a)),)
+	PLATFORM = osx
+else ifneq ($(findstring win,$(shell uname -a)),)
+	PLATFORM = win
+endif
 endif
 
 CFLAGS += -std=gnu99 -Wall -Wextra
 LDFLAGS += -lm -Wl,-no-undefined
 
 ifeq ($(PLATFORM),win)
-   CC = $(TOOLCHAIN_PREFIX)gcc
-   AR = $(TOOLCHAIN_PREFIX)ar
-   EXE_SUFFIX := .exe
-   SHARED := -shared
-   TARGET_SHARED := mufft.dll
-   TARGET_STATIC := libmufft.a
+	CC = $(TOOLCHAIN_PREFIX)gcc
+	AR = $(TOOLCHAIN_PREFIX)ar
+	EXE_SUFFIX := .exe
+	SHARED := -shared
+	TARGET_SHARED := mufft.dll
+	TARGET_STATIC := libmufft.a
 else ifeq ($(PLATFORM),osx)
-   FPIC := -fPIC
-   SHARED := -dynamiclib
-   TARGET_SHARED := libmufft.dylib
-   TARGET_STATIC := libmufft.a
+	FPIC := -fPIC
+	SHARED := -dynamiclib
+	TARGET_SHARED := libmufft.dylib
+	TARGET_STATIC := libmufft.a
 else
-   FPIC := -fPIC
-   SHARED := -shared
-   TARGET_SHARED := libmufft.so
-   TARGET_STATIC := libmufft.a
+	FPIC := -fPIC
+	SHARED := -shared
+	TARGET_SHARED := libmufft.so
+	TARGET_STATIC := libmufft.a
 endif
 
 ifneq ($(TOOLCHAIN_PREFIX),)
-   CC = $(TOOLCHAIN_PREFIX)gcc
-   AR = $(TOOLCHAIN_PREFIX)ar
+	CC = $(TOOLCHAIN_PREFIX)gcc
+	AR = $(TOOLCHAIN_PREFIX)ar
 endif
 
 ifeq ($(ARCH),)
-   ARCH := $(shell $(CC) -dumpmachine)
+	ARCH := $(shell $(CC) -dumpmachine)
 endif
 
 ifeq ($(DEBUG), 1)
-   CONFIG := debug
-   CFLAGS += -O0 -g -DMUFFT_DEBUG
+	CONFIG := debug
+	CFLAGS += -O0 -g -DMUFFT_DEBUG
 else
-   CONFIG := release
-   CFLAGS += -Ofast
+	CONFIG := release
+	CFLAGS += -Ofast
 endif
 
 ifeq ($(SANITIZE), 1)
-   CC = clang
-   CFLAGS += -fsanitize=memory
-   LDFLAGS += -fsanitize=memory
+	CC = clang
+	CFLAGS += -fsanitize=memory
+	LDFLAGS += -fsanitize=memory
 endif
+
+SIMD_ENABLE = 1
+
+ifeq ($(SIMD_ENABLE), 1)
 
 PLATFORM_SOURCES_X86 := x86/kernel.sse.c x86/kernel.sse3.c x86/kernel.avx.c
 PLATFORM_DEFINES_X86 := -DMUFFT_HAVE_SSE -DMUFFT_HAVE_SSE3 -DMUFFT_HAVE_AVX -DMUFFT_HAVE_X86
 ifneq ($(findstring x86_64,$(ARCH)),)
-   PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86) 
-   PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86) 
-   PLATFORM_ARCH := x86_64
+	PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86)
+	PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86)
+	PLATFORM_ARCH := x86_64
 else ifneq ($(findstring i386,$(ARCH)),)
-   PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86) 
-   PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86) 
-   PLATFORM_ARCH := x86
+	PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86)
+	PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86)
+	PLATFORM_ARCH := x86
 else ifneq ($(findstring i486,$(ARCH)),)
-   PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86) 
-   PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86) 
-   PLATFORM_ARCH := x86
+	PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86)
+	PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86)
+	PLATFORM_ARCH := x86
 else ifneq ($(findstring i586,$(ARCH)),)
-   PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86) 
-   PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86) 
-   PLATFORM_ARCH := x86
+	PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86)
+	PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86)
+	PLATFORM_ARCH := x86
 else ifneq ($(findstring i686,$(ARCH)),)
-   PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86) 
-   PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86) 
-   PLATFORM_ARCH := x86
+	PLATFORM_SOURCES := $(PLATFORM_SOURCES_X86)
+	PLATFORM_DEFINES := $(PLATFORM_DEFINES_X86)
+	PLATFORM_ARCH := x86
+endif
 endif
 
 CFLAGS += $(PLATFORM_DEFINES)
