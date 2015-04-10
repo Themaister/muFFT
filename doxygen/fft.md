@@ -265,3 +265,70 @@ To improve this, we need to do multiple FFT stages in one pass in order to have 
 We can do two radix-2 butterflies in one pass to obtain radix-4 and three radix-2 butterflies to get radix-8.
 muFFT implements radix-4 and radix-8 as well as radix-2.
 In theory we can keep increasing the radix like this, but eventually we run out of work registers.
+
+### Fast convolution with the FFT
+
+A non-obvious application of the FFT is linear convolution.
+The convolution is often used to apply filters to audio.
+
+    y[n] = conv(x, h) = sum i from -inf to +inf: x[n - i] * h[i]
+
+In reality, x[n] and h[n] are not infitely long so the sum becomes bounded.
+Convolution like this takes order O(N * M) where N is length of x and M is length of h.
+For very long filters, straight convolution becomes impractical.
+
+When we do a convolution, what we're essentially doing is to apply a frequency response.
+In the frequency domain, we're simply multiplying.
+What we can do instead is
+
+    y[n] = (1 / N) * IFFT(FFT(x) .* FFT(h))
+
+where `.*` denotes element-wise multiplication. The lengths of x and h here must be the same, but we can simply zero-pad at the end of either array to get this.
+Instead of O(N^2) for the convolution we now have order O(3NlogN + N).
+
+The normalization faction 1 / N mentioned earlier now becomes rather important, so we add that in as well.
+
+#### Circular convolution
+
+Note that the FFT convolution is circular, since the very definition we have for the FFT assumes that the signal is indeed circular.
+If length of x is N and h is M, the length of the convolution becomes N + M - 1.
+We therefore need an FFT which is at least this size to avoid wrapping errors. We round this value up to power-of-two, and zero pad x and h at the end up to this new FFT size.
+
+A very common operation in audio processing is to convolve two arrays of equal power-of-two length, say N.
+We need FFT of 2 * N - 1, but we round this up to 2 * N. We zero pad x and h with arrays of length N and do our FFT convolution.
+
+Since this exact pattern for zero-padding is so common, muFFT have options which lets the FFT transform assume that you have zero padded the upper half of the array.
+There is no need to copy your data over to a zero padded array first.
+
+### Optimizing the real-to-complex and complex-to-real transform
+
+Real-to-complex transforms and back can always be expressed using complex-to-complex transforms, but we are doing lots of redundant work in this case since the imaginary component of the input is always 0. In theory we can save roughly half the work by assuming the input data is always real.
+
+[This page](http://www.engineeringproductivitytools.com/stuff/T0001/PT10.HTM) explains how we can treat a real transform of N samples as a complex N / 2 sample transform
+by adding a simple butterfly stage at the end.
+We can also turn a complex-to-real transform of size into a regular inverse N / 2 complex transform by doing a simple radix-2 DIF butterfly stage.
+
+If we have two independent real signals (e.g. stereo audio), we can treat the left and right channels as a combined complex signal
+
+    s[n] = l[n] + ir[n]
+
+Notice that if we use the interleaved complex format of (real, imag, real, imag), regular interleaved stereo audio samples fit perfectly into this model already!
+If we take the FFT, we get
+
+    S[k] = L[k] + iR[k]
+
+We can now do a convolution with a real valued filter h[n], which is a very common operation in audio processing:
+
+    H[k] = h[n]
+
+    S'[k] = (L[k] + iR[k]) * H[k]
+          = L[k]H[k] + iR[k]H[k]
+
+    s'[n] = l'[n] + ir'[n]
+
+If we now take the inverse transform, we know that IFFT(L * H) is purely real, and IFFT(R * H) is purely real.
+i * IFFT(R * H) is therefore purely imaginary, and therefore completely orthogonal to IFFT(L * H) which is purely real.
+The left channel will be the real part of the filtered signal and the right channel will be the imaginary part of the filtered signal, which is exactly what we wanted to have
+since interleaved stereo samples are so common.
+
+muFFT implements all of these schemes in its convolution module as well as the real-to-complex and complex-to-real 1D transforms.
