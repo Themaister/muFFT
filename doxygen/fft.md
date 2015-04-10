@@ -246,3 +246,22 @@ The main difference is that instead of getting reordered input, we get reordered
 If we can help it, we'd like to avoid extra reordering steps. We want ordered input and ordered output.
 It turns out we can by making use of an extra buffer during computation of the FFT.
 We cannot do this computation in-place since butterfly steps are not written back to the same indices they were read from.
+
+[Eric Bainville's FFT page](http://www.bealto.com/gpu-fft_opencl-1.html) has a good illustration of how the Stockham autosort works and how it's implemented in a radix-2 algorithm.
+Input data is always read just like the first stage of the DIF algorithm, but it is written out to different places every time. The result is that the input indices are
+reordered one bit at a time for every stage.
+
+muFFT implements this scheme. It is very SIMD-friendly and can easily be extended to radix-4, radix-8 and beyond.
+
+### Radix-4 and Radix-8 extensions
+
+The Radix-2 formulation itself is fine, but it is not very efficient.
+On modern hardware architectures we want to do as much useful computation on the data we load as possible before writing it back out again.
+A Radix-2 implementation does very little work (just a twiddle complex multiply and butterfly) before writing back results to memory and
+if we only rely on a radix-2 implementation, we quickly find that we're not limited on arithmetic throughput of the architecture.
+There are also few possibilities to obtain decent instruction level parallelism which is vital to fully utilize modern heavily pipelined architectures.
+
+To improve this, we need to do multiple FFT stages in one pass in order to have more work in flight.
+We can do two radix-2 butterflies in one pass to obtain radix-4 and three radix-2 butterflies to get radix-8.
+muFFT implements radix-4 and radix-8 as well as radix-2.
+In theory we can keep increasing the radix like this, but eventually we run out of work registers.
