@@ -192,14 +192,57 @@ Note that it is possible to split into any factor you want, every third, every f
 
 Let's try to illustrate this for a DFT of length 8.
 
-               _______
-    x[0] ---- |       |--------------\----/-----X[0]
-    x[2] ---- | DFT   |-------------\-\--/-/----X[1]
-    x[4] ---- | N = 4 |------------\-\-\/-/-/---X[2]
-    x[6] ---- |_______|-----------\-\-\/\/-/-/--X[3]
-               _______             \ \/\/\/ /
-    x[1] ---- |       |-- W(0, 8) --\/\/\/\/----X[4]
-    x[3] ---- | DFT   |-- W(1, 8) ---\/\/\/-----X[5]
-    x[5] ---- | N = 4 |-- W(2, 8) ----\/\/------X[6]
-    x[7] ---- |_______|-- W(3, 8) -----\/-------X[7]
+![DIT](http://upload.wikimedia.org/wikipedia/commons/c/cb/DIT-FFT-butterfly.png)
 
+If we complete the recursion, we get a structure looking like this:
+
+![DITfull](http://www.transtutors.com/Uploadfile/CMS_Images/3528_decimation-in-time.JPG)
+
+This structure is called the Radix-2 decimation-in-time (DIT) algorithm.
+
+### The butterfly pattern
+
+The pattern created by the computation is quite pleasing.
+The computational pattern is
+
+    a' = a + W * b
+    b' = a - W * b
+
+Writing it out on paper obtains a pattern which is called the butterfly.
+`a` and `b` are updated in place in this structure.
+
+### Twiddle factors
+
+A common terminology in FFTs are the twiddle factors. The twiddle factors are the `W(k, N)` factors we multiply `Xodd[k]` with before doing a butterfly step with `Xeven[k]`.
+
+### Input data reordering
+
+As you can see from the DIT illustration, the input data has been reordered.
+The pattern here is that the input data indices have been sorted with reversed bit order.
+
+    000 (0) -> 000 (0)
+    001 (1) -> 100 (4)
+    010 (2) -> 010 (2)
+    011 (3) -> 110 (6)
+    100 (4) -> 001 (1)
+    101 (5) -> 101 (5)
+    110 (6) -> 011 (3)
+    111 (7) -> 111 (7)
+
+If we want to compute our DIT FFT in place, we would have to do this reordering step before computing the FFT.
+
+### Decimation-in-frequency (DIF)
+
+The DIF structure is very similar to DIT. The biggest difference is that the butterfly stages come in reverse order compared to DIT.
+The twiddle factors are multiplied in *after* the butterfly and not before as with DIT.
+It's easy to show that the DIF perfectly cancels out everything a DIT structure would do if the twiddle factors are conjugated (only difference between inverse and forward FFT),
+and therefore it's also a perfectly valid FFT implementation.
+The main difference is that instead of getting reordered input, we get reordered output instead, which is sometimes more desirable.
+
+![DIF](http://www.transtutors.com/Uploadfile/CMS_Images/21120_Twiddle%20factor.JPG)
+
+### Stockham autosort
+
+If we can help it, we'd like to avoid extra reordering steps. We want ordered input and ordered output.
+It turns out we can by making use of an extra buffer during computation of the FFT.
+We cannot do this computation in-place since butterfly steps are not written back to the same indices they were read from.
