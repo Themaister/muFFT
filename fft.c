@@ -391,7 +391,7 @@ static bool build_plan_2d(struct mufft_step_2d **steps, unsigned *num_steps, uns
             break;
     }
     // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
-    step_flags |= MUFFT_FLAG_MASK_CPU & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    step_flags |= mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
 
     while (radix > 1)
     {
