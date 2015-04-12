@@ -471,7 +471,7 @@ void mufft_radix2_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RE
             cfloat r1 = a - b; // 0O + 1
 
             output[i] = r0;
-            output[i + 1 * samples_x] = r1;
+            output[i + 1 * stride] = r1;
         }
     }
 }

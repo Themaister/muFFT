@@ -230,6 +230,22 @@ mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction,
 /// @returns A 2D transform plan, or `NULL` if an error occured.
 mufft_plan_2d *mufft_create_plan_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags);
 
+/// \brief Create a plan for a 2D complex-to-real inverse FFT.
+///
+/// The input and output data to the 2D transform is represented as a row-major array.
+///
+/// Note that even if only N / 2 + 1 complex samples are required for a complex-to-real transform,
+/// the input array of the transform is still expected to contain N columns of padded complex data.
+/// This is to help SIMD optimization since N / 2 + 1 is odd and would require unaligned memory accesses to work properly.
+/// The output array needs a minimum size of 2 * Nx * Ny * sizeof(float) and not the expected Nx * Ny * sizeof(float).
+/// muFFT uses the output buffer as a scratch buffer during the FFT computation.
+/// The end result however, will only require Nx * Ny * sizeof(float) size.
+/// 
+/// @param Nx The transform size in X dimension (number of columns). Must be power-of-two and at least 4.
+/// @param Ny The transform size in Y dimension (number of rows). Must be power-of-two and at least 2.
+/// @param flags Flags for the planning. See \ref MUFFT_FLAG.
+/// @returns A 2D transform plan, or `NULL` if an error occured.
+mufft_plan_2d *mufft_create_plan_2d_c2r(unsigned Nx, unsigned Ny, unsigned flags);
 
 /// \brief Executes a 2D FFT plan.
 /// @param plan Previously allocated 2D FFT plan.

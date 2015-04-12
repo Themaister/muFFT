@@ -114,6 +114,58 @@ static void test_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags)
     fftwf_destroy_plan(plan);
 }
 
+static void test_fft_2d_c2r(unsigned Nx, unsigned Ny, unsigned flags)
+{
+    unsigned fftN = Nx / 2 + 1;
+    complex float *input = mufft_calloc(Nx * Ny * sizeof(complex float));
+    float *output = mufft_calloc(2 * Nx * Ny * sizeof(float));
+    complex float *input_fftw = fftwf_malloc(Nx * Ny * sizeof(complex float));
+    float *output_fftw = fftwf_malloc(2 * Nx * Ny * sizeof(float));
+
+    srand(0);
+    for (unsigned y = 0; y < Ny; y++)
+    {
+        for (unsigned x = 1; x < Nx / 2; x++)
+        {
+            float real = (float)rand() / RAND_MAX - 0.5f;
+            float imag = (float)rand() / RAND_MAX - 0.5f;
+            input[y * Nx + x] = real + _Complex_I * imag;
+        }
+    }
+    input[0] = (float)rand() / RAND_MAX - 0.5f;
+    input[Ny / 2 * Nx] = (float)rand() / RAND_MAX - 0.5f;
+    input[Nx / 2] = (float)rand() / RAND_MAX - 0.5f;
+    input[Ny / 2 * Nx + Nx / 2] = (float)rand() / RAND_MAX - 0.5f;
+
+    fftwf_plan plan = fftwf_plan_dft_c2r_2d(Ny, Nx, input_fftw, output_fftw,
+            FFTW_ESTIMATE);
+    mufft_assert(plan != NULL);
+    for (unsigned y = 0; y < Ny; y++)
+    {
+        memcpy(input_fftw + fftN * y, input + Nx * y, fftN * sizeof(complex float));
+    }
+
+    mufft_plan_2d *muplan = mufft_create_plan_2d_c2r(Nx, Ny, flags);
+    mufft_assert(muplan != NULL);
+
+    fftwf_execute(plan);
+    mufft_execute_plan_2d(muplan, output, input);
+
+    const float epsilon = 0.000001f * sqrtf(Nx * Ny);
+    for (unsigned i = 0; i < Nx * Ny; i++)
+    {
+        float delta = fabsf(output[i] - output_fftw[i]);
+        mufft_assert(delta < epsilon);
+    }
+
+    mufft_free(input);
+    mufft_free(output);
+    mufft_free_plan_2d(muplan);
+    fftwf_free(input_fftw);
+    fftwf_free(output_fftw);
+    fftwf_destroy_plan(plan);
+}
+
 static void test_fft_1d(unsigned N, int direction, unsigned flags)
 {
     complex float *input = mufft_alloc(N * sizeof(complex float));
@@ -493,10 +545,13 @@ int main(void)
                 printf("Testing 2D real-to-complex transform size %u-by-%u, flags = %u.\n", Nx, Ny, flags);
                 test_fft_2d_r2c(Nx, Ny, flags);
                 printf("    ... Passed\n");
+
+                printf("Testing 2D complex-to-real transform size %u-by-%u, flags = %u.\n", Nx, Ny, flags);
+                test_fft_2d_c2r(Nx, Ny, flags);
+                printf("    ... Passed\n");
             }
         }
     }
-
 
     fftwf_cleanup();
     printf("All tests passed!\n");

@@ -681,7 +681,7 @@ mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction,
         goto error;
     }
 
-    if ((flags & MUFFT_FLAG_R2C) != 0)
+    if ((flags & (MUFFT_FLAG_R2C | MUFFT_FLAG_C2R)) != 0)
     {
         plan->tmp_buffer = mufft_alloc(2 * Nx * Ny * sizeof(cfloat));
     }
@@ -758,6 +758,38 @@ error:
     return NULL;
 }
 
+mufft_plan_2d *mufft_create_plan_2d_c2r(unsigned Nx, unsigned Ny, unsigned flags)
+{
+    if ((Nx & (Nx - 1)) != 0 || (Ny & (Ny - 1)) != 0 || Nx == 1 || Ny == 1)
+    {
+        return NULL;
+    }
+
+    unsigned complex_n = Nx / 2;
+    mufft_plan_2d *plan = mufft_create_plan_2d_c2c(complex_n, Ny, MUFFT_INVERSE, flags | MUFFT_FLAG_C2R);
+    if (plan == NULL)
+    {
+        goto error;
+    }
+
+    plan->r2c_twiddles = build_r2c_twiddles(MUFFT_INVERSE, complex_n);
+    if (plan->r2c_twiddles == NULL)
+    {
+        goto error;
+    }
+
+    plan->c2r_resolve = find_r2c_resolve_func(flags | MUFFT_FLAG_C2R, Nx);
+    if (plan->c2r_resolve == NULL)
+    {
+        goto error;
+    }
+
+    return plan;
+
+error:
+    mufft_free_plan_2d(plan);
+    return NULL;
+}
 
 void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void *input)
 {
@@ -821,68 +853,134 @@ void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, co
     unsigned Nx = plan->Nx;
     unsigned Ny = plan->Ny;
 
-    unsigned vertical_stride_x = plan->r2c_resolve != NULL ? 2 * Nx : Nx;
-
-    cfloat *hout = output;
-    cfloat *hin = plan->tmp_buffer;
-    if ((plan->num_steps_y & 1) == 0)
+    // If we're doing complex-to-real transform, we have to do the inverse transform vertically first, then horizontally.
+    // Otherwise, our assumption that the FFT has conjugates due to real-to-complex transform doesn't hold anymore.
+    if (plan->c2r_resolve != NULL)
     {
-        SWAP(hout, hin);
-    }
-
-    cfloat *out = hin;
-    cfloat *in = hout;
-
-    unsigned num_steps_x = plan->num_steps_x + (plan->r2c_resolve != NULL);
-    if ((num_steps_x & 1) == 1)
-    {
-        SWAP(out, in);
-    }
-
-    // First, horizontal transforms over all lines individually.
-    for (unsigned y = 0; y < Ny; y++)
-    {
-        cfloat *tin = in;
-        cfloat *tout = out;
-
-        const struct mufft_step_1d *first_step = &plan->steps_x[0];
-        first_step->func(tin + y * Nx, input + y * Nx, ptx, 1, Nx);
-
-        for (unsigned i = 1; i < plan->num_steps_x; i++)
+        cfloat *hout = output;
+        cfloat *hin = plan->tmp_buffer;
+        if ((plan->num_steps_x & 1) == 1)
         {
-            const struct mufft_step_1d *step = &plan->steps_x[i];
-            step->func(tout + y * Nx, tin + y * Nx, ptx + step->twiddle_offset, step->p, Nx);
-            SWAP(tout, tin);
+            SWAP(hout, hin);
         }
-    }
 
-    if (plan->r2c_resolve != NULL)
-    {
-        // Do Real-to-complex butterfly resolve.
-        // Double the strides now.
+        cfloat *out = hout;
+        cfloat *in = hin;
+
+        unsigned num_steps_y = plan->num_steps_y;
+        if ((num_steps_y & 1) == 0)
+        {
+            SWAP(out, in);
+        }
+
+        // First, vertical transforms.
+        const struct mufft_step_2d *first_step = &plan->steps_y[0];
+        first_step->func(in, input, pty, 1, Nx + 1, 2 * Nx, Ny);
+        for (unsigned i = 1; i < plan->num_steps_y; i++)
+        {
+            const struct mufft_step_2d *step = &plan->steps_y[i];
+            step->func(out, in, pty + step->twiddle_offset, step->p, Nx + 1, 2 * Nx, Ny);
+            SWAP(out, in);
+        }
+
+        mufft_assert(in == hin);
+
+        // Do first inverse FFT butterfly pass horizontally.
         for (unsigned y = 0; y < Ny; y++)
         {
-            plan->r2c_resolve(hin + 2 * y * Nx, hout + y * Nx,
-                    plan->r2c_twiddles, Nx);
+            plan->c2r_resolve(hout + y * Nx, hin + 2 * y * Nx, plan->r2c_twiddles, Nx);
+        }
+
+        // Then, horizontal transforms over all lines individually.
+        for (unsigned y = 0; y < Ny; y++)
+        {
+            cfloat *tin = hin;
+            cfloat *tout = hout;
+
+            const struct mufft_step_1d *first_step = &plan->steps_x[0];
+            first_step->func(tin + y * Nx, tout + y * Nx, ptx, 1, Nx);
+            for (unsigned i = 1; i < plan->num_steps_x; i++)
+            {
+                const struct mufft_step_1d *step = &plan->steps_x[i];
+                step->func(tout + y * Nx, tin + y * Nx, ptx + step->twiddle_offset, step->p, Nx);
+                SWAP(tout, tin);
+            }
+
+            mufft_assert(tin == output);
         }
     }
-
-    // Since Nx is actually N / 2 if R2C, this is either Nx + 1 or Nx * 2 if we're doing R2C transform.
-    Nx = plan->vertical_nx;
-
-    // Vertical transforms.
-    const struct mufft_step_2d *first_step = &plan->steps_y[0];
-    first_step->func(hout, hin, pty, 1, Nx, vertical_stride_x, Ny);
-    SWAP(hout, hin);
-
-    for (unsigned i = 1; i < plan->num_steps_y; i++)
+    else
     {
-        const struct mufft_step_2d *step = &plan->steps_y[i];
-        step->func(hout, hin, pty + step->twiddle_offset, step->p, Nx, vertical_stride_x, Ny);
-        SWAP(hout, hin);
-    }
+        // Complex-to-complex or real-to-complex transform.
+        unsigned vertical_stride_x = (plan->r2c_resolve != NULL) ? 2 * Nx : Nx;
 
-    mufft_assert(hin == output);
+        cfloat *hout = output;
+        cfloat *hin = plan->tmp_buffer;
+        if ((plan->num_steps_y & 1) == 0)
+        {
+            SWAP(hout, hin);
+        }
+
+        cfloat *out = hin;
+        cfloat *in = hout;
+
+        unsigned num_steps_x = plan->num_steps_x + (plan->r2c_resolve != NULL);
+        if ((num_steps_x & 1) == 1)
+        {
+            SWAP(out, in);
+        }
+
+        // First, horizontal transforms over all lines individually.
+        for (unsigned y = 0; y < Ny; y++)
+        {
+            cfloat *tin = in;
+            cfloat *tout = out;
+
+            const struct mufft_step_1d *first_step = &plan->steps_x[0];
+            if (plan->c2r_resolve != NULL)
+            {
+                plan->c2r_resolve(tout + y * Nx, input + 2 * y * Nx, plan->r2c_twiddles, Nx);
+                first_step->func(tin + y * Nx, tout + y * Nx, ptx, 1, Nx);
+            }
+            else
+            {
+                first_step->func(tin + y * Nx, input + y * Nx, ptx, 1, Nx);
+            }
+
+            for (unsigned i = 1; i < plan->num_steps_x; i++)
+            {
+                const struct mufft_step_1d *step = &plan->steps_x[i];
+                step->func(tout + y * Nx, tin + y * Nx, ptx + step->twiddle_offset, step->p, Nx);
+                SWAP(tout, tin);
+            }
+        }
+
+        if (plan->r2c_resolve != NULL)
+        {
+            // Do Real-to-complex butterfly resolve.
+            // Double the strides now.
+            for (unsigned y = 0; y < Ny; y++)
+            {
+                plan->r2c_resolve(hin + 2 * y * Nx, hout + y * Nx,
+                        plan->r2c_twiddles, Nx);
+            }
+        }
+
+        // Since Nx is actually N / 2 if R2C, this is either Nx + 1 or Nx * 2 if we're doing R2C transform.
+        Nx = plan->vertical_nx;
+
+        // Vertical transforms.
+        const struct mufft_step_2d *first_step = &plan->steps_y[0];
+        first_step->func(hout, hin, pty, 1, Nx, vertical_stride_x, Ny);
+        SWAP(hout, hin);
+
+        for (unsigned i = 1; i < plan->num_steps_y; i++)
+        {
+            const struct mufft_step_2d *step = &plan->steps_y[i];
+            step->func(hout, hin, pty + step->twiddle_offset, step->p, Nx, vertical_stride_x, Ny);
+            SWAP(hout, hin);
+        }
+    }
 }
 
 void mufft_free_plan_1d(mufft_plan_1d *plan)
