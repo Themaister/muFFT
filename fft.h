@@ -61,7 +61,7 @@ extern "C" {
 /// The real-to-complex 1D transform will also output the redundant conjugate values X(N - k) = X(k)*.
 #define MUFFT_FLAG_FULL_R2C (1 << 16)
 /// The second/upper half of the input array is assumed to be 0 and will not be read and memory for the second half of the input array does not have to be allocated.
-/// This is mostly useful when you want to do zero-padded FFTs which are very common for convolution-type operations, see \ref MUFFT_CONV.
+/// This is mostly useful when you want to do zero-padded FFTs which are very common for convolution-type operations, see \ref MUFFT_CONV. This flag is only recognized for 1D transforms.
 #define MUFFT_FLAG_ZERO_PAD_UPPER_HALF (1 << 17)
 /// @}
 
@@ -189,7 +189,7 @@ void mufft_execute_conv_output(mufft_plan_conv *plan, void *output);
 void mufft_free_plan_conv(mufft_plan_conv *plan);
 /// @}
 
-/// \addtogroup MUFFT_2D 2D complex FFT
+/// \addtogroup MUFFT_2D 2D real and complex FFT
 /// @{
 /// The FFT performed by these functions are not normalized.
 /// A forward transform followed by an inverse transform will scale the output by the transform size (Nx * Ny).
@@ -212,6 +212,24 @@ typedef struct mufft_plan_2d mufft_plan_2d;
 /// @param flags Flags for the planning. See \ref MUFFT_FLAG.
 /// @returns A 2D transform plan, or `NULL` if an error occured.
 mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction, unsigned flags);
+
+/// \brief Create a plan for a 2D real-to-complex forward FFT.
+///
+/// The input and output data to the 2D transform is represented as a row-major array.
+///
+/// Note that even if only N / 2 + 1 complex samples are required for a real-to-complex transform,
+/// the output array of the transform is still expected to contain N columns of complex data.
+/// This is to help SIMD optimization since N / 2 + 1 is odd and would require unaligned memory accesses to work properly.
+/// The vertical transform will only transform the first N / 2 + D columns,
+/// where D is some convenient value which aligns well to the SIMD instruction set used.
+/// The full N complex samples can be processed vertically as well if \ref MUFFT_FLAG_FULL_R2C is used.
+/// 
+/// @param Nx The transform size in X dimension (number of columns). Must be power-of-two and at least 4.
+/// @param Ny The transform size in Y dimension (number of rows). Must be power-of-two and at least 2.
+/// @param flags Flags for the planning. See \ref MUFFT_FLAG. If \ref MUFFT_FLAG_FULL_R2C flag is added, the transform will output the full N complex frequency samples, instead of the minimum N / 2 + 1 samples.
+/// @returns A 2D transform plan, or `NULL` if an error occured.
+mufft_plan_2d *mufft_create_plan_2d_r2c(unsigned Nx, unsigned Ny, int direction, unsigned flags);
+
 
 /// \brief Executes a 2D FFT plan.
 /// @param plan Previously allocated 2D FFT plan.

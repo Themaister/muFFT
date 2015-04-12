@@ -432,6 +432,42 @@ static bool build_plan_2d(struct mufft_step_2d **steps, unsigned *num_steps, uns
 // The real-to-complex transform is implemented with a N / 2 complex transform with a
 // final butterfly which extracts real/imag parts of the complex transform.
 // See http://www.engineeringproductivitytools.com/stuff/T0001/PT10.HTM for details on algorithm.
+
+static cfloat *build_r2c_twiddles(int direction, unsigned N)
+{
+    cfloat *twiddles = mufft_alloc(N * sizeof(cfloat));
+    if (twiddles == NULL)
+    {
+        return NULL;
+    }
+
+    for (unsigned i = 0; i < N; i++)
+    {
+        twiddles[i] = I * direction * twiddle(direction, i, N);
+    }
+
+    return twiddles;
+}
+
+static void find_r2c_resolve_func(unsigned flags, unsigned N)
+{
+    // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
+    unsigned resolve_flags = mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
+    resolve_flags |= flags & (MUFFT_FLAG_R2C | MUFFT_FLAG_C2R | MUFFT_FLAG_FULL_R2C);
+
+    for (unsigned i = 0; i < ARRAY_SIZE(fft_r2c_resolve_table); i++)
+    {
+        const struct fft_r2c_resolve_step *step = &fft_r2c_resolve_table[i];
+        if ((step->flags & resolve_flags) == step->flags &&
+                N >= step->minimum_elements)
+        {
+            return step->func;
+        }
+    }
+
+    return NULL;
+}
+
 mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags)
 {
     if ((N & (N - 1)) != 0 || N == 1)
@@ -447,33 +483,18 @@ mufft_plan_1d *mufft_create_plan_1d_r2c(unsigned N, unsigned flags)
         goto error;
     }
 
-    plan->r2c_twiddles = mufft_alloc(complex_n * sizeof(cfloat));
+    plan->r2c_twiddles = build_r2c_twiddles(MUFFT_FORWARD, complex_n);
     if (plan->r2c_twiddles == NULL)
     {
         goto error;
     }
 
-    for (unsigned i = 0; i < complex_n; i++)
+    if ((flags & MUFFT_FLAG_FULL_R2C) == 0)
     {
-        plan->r2c_twiddles[i] = -I * twiddle(-1, i, complex_n);
+        flags |= MUFFT_FLAG_R2C;
     }
 
-    // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
-    unsigned resolve_flags = mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
-    resolve_flags |= (flags & MUFFT_FLAG_FULL_R2C) != 0 ?
-        MUFFT_FLAG_FULL_R2C : MUFFT_FLAG_R2C;
-
-    for (unsigned i = 0; i < ARRAY_SIZE(fft_r2c_resolve_table); i++)
-    {
-        const struct fft_r2c_resolve_step *step = &fft_r2c_resolve_table[i];
-        if ((step->flags & resolve_flags) == step->flags &&
-                N >= step->minimum_elements)
-        {
-            plan->r2c_resolve = step->func;
-            break;
-        }
-    }
-
+    plan->r2c_resolve = find_r2c_resolve_func(flags, N);
     if (plan->r2c_resolve == NULL)
     {
         goto error;
@@ -501,32 +522,13 @@ mufft_plan_1d *mufft_create_plan_1d_c2r(unsigned N, unsigned flags)
         goto error;
     }
 
-    plan->r2c_twiddles = mufft_alloc(complex_n * sizeof(cfloat));
+    plan->r2c_twiddles = build_r2c_twiddles(MUFFT_INVERSE, complex_n);
     if (plan->r2c_twiddles == NULL)
     {
         goto error;
     }
 
-    for (unsigned i = 0; i < complex_n; i++)
-    {
-        plan->r2c_twiddles[i] = I * twiddle(+1, i, complex_n);
-    }
-
-    // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
-    unsigned resolve_flags = mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
-    resolve_flags |= MUFFT_FLAG_C2R;
-
-    for (unsigned i = 0; i < ARRAY_SIZE(fft_r2c_resolve_table); i++)
-    {
-        const struct fft_r2c_resolve_step *step = &fft_r2c_resolve_table[i];
-        if ((step->flags & resolve_flags) == step->flags &&
-                N >= step->minimum_elements)
-        {
-            plan->c2r_resolve = step->func;
-            break;
-        }
-    }
-
+    plan->c2r_resolve = find_r2c_resolve_func(flags | MUFFT_FLAG_C2R, N);
     if (plan->c2r_resolve == NULL)
     {
         goto error;
@@ -692,6 +694,7 @@ mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction,
 
     plan->Nx = Nx;
     plan->Ny = Ny;
+    plan->vertical_nx = Nx;
     return plan;
 
 error:
@@ -770,7 +773,9 @@ void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, co
 
     cfloat *out = hin;
     cfloat *in = hout;
-    if ((plan->num_steps_x & 1) == 1)
+
+    unsigned num_steps_x = plan->num_steps_x + (plan->r2c_resolve != NULL);
+    if ((num_steps_x & 1) == 1)
     {
         SWAP(out, in);
     }
@@ -791,18 +796,31 @@ void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, co
             SWAP(tout, tin);
         }
 
+        // Do Real-to-complex butterfly resolve.
+        if (plan->r2c_resolve != NULL)
+        {
+            // Double the strides now
+            plan->r2c_resolve(tout + 2 * y * Nx, tin + y * Nx,
+                    plan->r2c_twiddles, Nx);
+            SWAP(tout, tin);
+        }
+
         mufft_assert(tin == hin);
     }
 
+    unsigned stride_x = plan->r2c_resolve != NULL ? 2 * Nx : Nx;
+    Nx = plan->vertical_nx; // Either N / 2 + 1 or N depending on our flags.
+    // Since Nx is actually N / 2, this is either Nx + 1 or Nx * 2.
+
     // Vertical transforms.
     const struct mufft_step_2d *first_step = &plan->steps_y[0];
-    first_step->func(hout, hin, pty, 1, Nx, Ny);
+    first_step->func(hout, hin, pty, 1, Nx, vertical_stride_x, Ny);
     SWAP(hout, hin);
 
     for (unsigned i = 1; i < plan->num_steps_y; i++)
     {
         const struct mufft_step_2d *step = &plan->steps_y[i];
-        step->func(hout, hin, pty + step->twiddle_offset, step->p, Nx, Ny);
+        step->func(hout, hin, pty + step->twiddle_offset, step->p, Nx, vertical_stride_x, Ny);
         SWAP(hout, hin);
     }
 
