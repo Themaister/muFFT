@@ -821,7 +821,6 @@ void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, co
     unsigned Nx = plan->Nx;
     unsigned Ny = plan->Ny;
 
-    // Since Nx is actually N / 2, this is either Nx + 1 or Nx * 2.
     unsigned vertical_stride_x = plan->r2c_resolve != NULL ? 2 * Nx : Nx;
 
     cfloat *hout = output;
@@ -855,20 +854,21 @@ void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, co
             step->func(tout + y * Nx, tin + y * Nx, ptx + step->twiddle_offset, step->p, Nx);
             SWAP(tout, tin);
         }
-
-        // Do Real-to-complex butterfly resolve.
-        if (plan->r2c_resolve != NULL)
-        {
-            // Double the strides now.
-            plan->r2c_resolve(tout + 2 * y * Nx, tin + y * Nx,
-                    plan->r2c_twiddles, Nx);
-            SWAP(tout, tin);
-        }
-
-        mufft_assert(tin == hin);
     }
 
-    Nx = plan->vertical_nx; // Either N / 2 + 1 or N depending on our flags.
+    if (plan->r2c_resolve != NULL)
+    {
+        // Do Real-to-complex butterfly resolve.
+        // Double the strides now.
+        for (unsigned y = 0; y < Ny; y++)
+        {
+            plan->r2c_resolve(hin + 2 * y * Nx, hout + y * Nx,
+                    plan->r2c_twiddles, Nx);
+        }
+    }
+
+    // Since Nx is actually N / 2 if R2C, this is either Nx + 1 or Nx * 2 if we're doing R2C transform.
+    Nx = plan->vertical_nx;
 
     // Vertical transforms.
     const struct mufft_step_2d *first_step = &plan->steps_y[0];

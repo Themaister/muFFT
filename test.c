@@ -70,6 +70,50 @@ static void test_fft_2d(unsigned Nx, unsigned Ny, int direction, unsigned flags)
     fftwf_destroy_plan(plan);
 }
 
+static void test_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags)
+{
+    unsigned fftN = Nx / 2 + 1;
+    float *input = mufft_alloc(Nx * Ny * sizeof(float));
+    complex float *output = mufft_alloc(Nx * Ny * sizeof(complex float));
+    float *input_fftw = fftwf_malloc(Nx * Ny * sizeof(float));
+    complex float *output_fftw = fftwf_malloc(fftN * Ny * sizeof(fftwf_complex));
+
+    srand(0);
+    for (unsigned i = 0; i < Nx * Ny; i++)
+    {
+        float real = (float)rand() / RAND_MAX - 0.5f;
+        input[i] = real;
+    }
+
+    fftwf_plan plan = fftwf_plan_dft_r2c_2d(Ny, Nx, input_fftw, output_fftw,
+            FFTW_ESTIMATE);
+    mufft_assert(plan != NULL);
+    memcpy(input_fftw, input, Nx * Ny * sizeof(float));
+
+    mufft_plan_2d *muplan = mufft_create_plan_2d_r2c(Nx, Ny, flags);
+    mufft_assert(muplan != NULL);
+
+    fftwf_execute(plan);
+    mufft_execute_plan_2d(muplan, output, input);
+
+    const float epsilon = 0.000001f * sqrtf(Nx * Ny);
+    for (unsigned y = 0; y < Ny; y++)
+    {
+        for (unsigned x = 0; x < fftN; x++)
+        {
+            float delta = cabsf(output[y * Nx + x] - output_fftw[y * fftN + x]);
+            mufft_assert(delta < epsilon);
+        }
+    }
+
+    mufft_free(input);
+    mufft_free(output);
+    mufft_free_plan_2d(muplan);
+    fftwf_free(input_fftw);
+    fftwf_free(output_fftw);
+    fftwf_destroy_plan(plan);
+}
+
 static void test_fft_1d(unsigned N, int direction, unsigned flags)
 {
     complex float *input = mufft_alloc(N * sizeof(complex float));
@@ -409,7 +453,7 @@ int main(void)
         }
     }
 
-    for (unsigned N = 4; N < 128 * 1024; N <<= 1)
+    for (unsigned N = 4; N < 32 * 1024; N <<= 1)
     {
         for (unsigned flags = 0; flags < 8; flags++)
         {
@@ -439,6 +483,20 @@ int main(void)
             }
         }
     }
+
+    for (unsigned Ny = 4; Ny < 1024; Ny <<= 1)
+    {
+        for (unsigned Nx = 4; Nx < 1024; Nx <<= 1)
+        {
+            for (unsigned flags = 0; flags < 8; flags++)
+            {
+                printf("Testing 2D real-to-complex transform size %u-by-%u, flags = %u.\n", Nx, Ny, flags);
+                test_fft_2d_r2c(Nx, Ny, flags);
+                printf("    ... Passed\n");
+            }
+        }
+    }
+
 
     fftwf_cleanup();
     printf("All tests passed!\n");
