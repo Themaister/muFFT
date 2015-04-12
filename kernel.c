@@ -449,7 +449,7 @@ void mufft_radix8_generic_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RE
 }
 
 void mufft_radix2_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -457,10 +457,10 @@ void mufft_radix2_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RE
     (void)p;
 
     unsigned half_lines = samples_y >> 1;
-    unsigned half_stride = samples_x * half_lines;
+    unsigned half_stride = stride * half_lines;
 
     for (unsigned line = 0; line < half_lines;
-            line++, input += samples_x, output += samples_x << 1)
+            line++, input += stride, output += stride << 1)
     {
         for (unsigned i = 0; i < samples_x; i++)
         {
@@ -477,20 +477,20 @@ void mufft_radix2_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RE
 }
 
 void mufft_radix2_generic_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
 
     unsigned half_lines = samples_y >> 1;
-    unsigned half_stride = samples_x * half_lines;
-    unsigned out_stride = p * samples_x;
+    unsigned half_stride = stride * half_lines;
+    unsigned out_stride = p * stride;
 
     for (unsigned line = 0; line < half_lines;
-            line++, input += samples_x)
+            line++, input += stride)
     {
         unsigned k = line & (p - 1);
-        unsigned j = ((line << 1) - k) * samples_x;
+        unsigned j = ((line << 1) - k) * stride;
 
         for (unsigned i = 0; i < samples_x; i++)
         {
@@ -507,7 +507,7 @@ void mufft_radix2_generic_vert_c(void * MUFFT_RESTRICT output_, const void * MUF
 }
 
 void mufft_forward_radix4_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -515,10 +515,10 @@ void mufft_forward_radix4_p1_vert_c(void * MUFFT_RESTRICT output_, const void * 
     (void)p;
 
     unsigned quarter_lines = samples_y >> 2;
-    unsigned quarter_stride = samples_x * quarter_lines;
+    unsigned quarter_stride = stride * quarter_lines;
 
     for (unsigned line = 0; line < quarter_lines;
-            line++, input += samples_x, output += samples_x << 2)
+            line++, input += stride, output += stride << 2)
     {
         for (unsigned i = 0; i < samples_x; i++)
         {
@@ -541,33 +541,33 @@ void mufft_forward_radix4_p1_vert_c(void * MUFFT_RESTRICT output_, const void * 
             d = r1 - r3; // O0 + 3
 
             output[i] = a;
-            output[i + 1 * samples_x] = b;
-            output[i + 2 * samples_x] = c;
-            output[i + 3 * samples_x] = d;
+            output[i + 1 * stride] = b;
+            output[i + 2 * stride] = c;
+            output[i + 3 * stride] = d;
         }
     }
 }
 
 void mufft_inverse_radix4_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
-    mufft_forward_radix4_p1_vert_c(output_, input_, twiddles, p, samples_x, samples_y);
+    mufft_forward_radix4_p1_vert_c(output_, input_, twiddles, p, samples_x, stride, samples_y);
 }
 
 void mufft_radix4_generic_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
 
     unsigned quarter_lines = samples_y >> 2;
-    unsigned quarter_stride = samples_x * quarter_lines;
-    unsigned out_stride = p * samples_x;
+    unsigned quarter_stride = stride* quarter_lines;
+    unsigned out_stride = p * stride;
 
-    for (unsigned line = 0; line < quarter_lines; line++, input += samples_x)
+    for (unsigned line = 0; line < quarter_lines; line++, input += stride)
     {
         unsigned k = line & (p - 1);
-        unsigned j = (((line - k) << 2) + k) * samples_x;
+        unsigned j = (((line - k) << 2) + k) * stride;
 
         for (unsigned i = 0; i < samples_x; i++)
         {
@@ -598,17 +598,17 @@ void mufft_radix4_generic_vert_c(void * MUFFT_RESTRICT output_, const void * MUF
 }
 
 void mufft_forward_radix8_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
     (void)p;
 
     unsigned octa_lines = samples_y >> 3;
-    unsigned octa_stride = samples_x * octa_lines;
+    unsigned octa_stride = stride * octa_lines;
 
     for (unsigned line = 0; line < octa_lines;
-            line++, input += samples_x, output += samples_x << 3)
+            line++, input += stride, output += stride << 3)
     {
         for (unsigned i = 0; i < samples_x; i++)
         {
@@ -649,37 +649,37 @@ void mufft_forward_radix8_p1_vert_c(void * MUFFT_RESTRICT output_, const void * 
             h *= twiddles[7];
 
             output[i] = a + e;
-            output[i + 1 * samples_x] = b + f;
-            output[i + 2 * samples_x] = c + g;
-            output[i + 3 * samples_x] = d + h;
-            output[i + 4 * samples_x] = a - e;
-            output[i + 5 * samples_x] = b - f;
-            output[i + 6 * samples_x] = c - g;
-            output[i + 7 * samples_x] = d - h;
+            output[i + 1 * stride] = b + f;
+            output[i + 2 * stride] = c + g;
+            output[i + 3 * stride] = d + h;
+            output[i + 4 * stride] = a - e;
+            output[i + 5 * stride] = b - f;
+            output[i + 6 * stride] = c - g;
+            output[i + 7 * stride] = d - h;
         }
     }
 }
 
 void mufft_inverse_radix8_p1_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
-    mufft_forward_radix8_p1_vert_c(output_, input_, twiddles, p, samples_x, samples_y);
+    mufft_forward_radix8_p1_vert_c(output_, input_, twiddles, p, samples_x, stride, samples_y);
 }
 
 void mufft_radix8_generic_vert_c(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
 
     unsigned octa_lines = samples_y >> 3;
-    unsigned octa_stride = samples_x * octa_lines;
-    unsigned out_stride = p * samples_x;
+    unsigned octa_stride = stride * octa_lines;
+    unsigned out_stride = p * stride;
 
-    for (unsigned line = 0; line < octa_lines; line++, input += samples_x)
+    for (unsigned line = 0; line < octa_lines; line++, input += stride)
     {
         unsigned k = line & (p - 1);
-        unsigned j = (((line - k) << 3) + k) * samples_x;
+        unsigned j = (((line - k) << 3) + k) * stride;
 
         for (unsigned i = 0; i < samples_x; i++)
         {

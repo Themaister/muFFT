@@ -57,7 +57,7 @@ typedef void (*mufft_1d_func)(void * MUFFT_RESTRICT output, const void * MUFFT_R
 
 /// 2D/vertical FFT routine signature
 typedef void (*mufft_2d_func)(void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y);
 
 /// Real-to-complex and complex-to-real resolve routine signature
 typedef void (*mufft_r2c_resolve_func)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned samples);
@@ -79,7 +79,7 @@ typedef void (*mufft_convolve_func)(cfloat * MUFFT_RESTRICT output, const cfloat
 #define FFT_1D_FUNC(name, arch) void MANGLE(name, arch) (void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples);
 
 /// Declared a mangled 2D FFT function
-#define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y);
+#define FFT_2D_FUNC(name, arch) void MANGLE(name, arch) (void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y);
 
 /// Declares all available routines for a specific SIMD instruction set
 #define DECLARE_FFT_CPU(arch) \

@@ -652,7 +652,7 @@ void MANGLE(mufft_radix8_generic)(void * MUFFT_RESTRICT output_, const void * MU
 
 
 void MANGLE(mufft_radix2_p1_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
@@ -660,10 +660,10 @@ void MANGLE(mufft_radix2_p1_vert)(void * MUFFT_RESTRICT output_, const void * MU
     (void)p;
 
     unsigned half_lines = samples_y >> 1;
-    unsigned half_stride = samples_x * half_lines;
+    unsigned half_stride = stride * half_lines;
 
     for (unsigned line = 0; line < half_lines;
-            line++, input += samples_x, output += samples_x << 1)
+            line++, input += stride, output += stride << 1)
     {
         for (unsigned i = 0; i < samples_x; i += VSIZE)
         {
@@ -674,26 +674,26 @@ void MANGLE(mufft_radix2_p1_vert)(void * MUFFT_RESTRICT output_, const void * MU
             MM r1 = sub_ps(a, b);
 
             store_ps(&output[i], r0);
-            store_ps(&output[i + 1 * samples_x], r1);
+            store_ps(&output[i + 1 * stride], r1);
         }
     }
 }
 
 void MANGLE(mufft_radix2_generic_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
 
     unsigned half_lines = samples_y >> 1;
-    unsigned half_stride = samples_x * half_lines;
-    unsigned out_stride = p * samples_x;
+    unsigned half_stride = stride * half_lines;
+    unsigned out_stride = p * stride;
 
     for (unsigned line = 0; line < half_lines;
-            line++, input += samples_x)
+            line++, input += stride)
     {
         unsigned k = line & (p - 1);
-        unsigned j = ((line << 1) - k) * samples_x;
+        unsigned j = ((line << 1) - k) * stride;
         const MM w = splat_complex(&twiddles[k]);
 
         for (unsigned i = 0; i < samples_x; i += VSIZE)
@@ -713,7 +713,7 @@ void MANGLE(mufft_radix2_generic_vert)(void * MUFFT_RESTRICT output_, const void
 
 #define RADIX4_P1_VERT(direction, twiddle_r, twiddle_i) \
 void MANGLE(mufft_ ## direction ## _radix4_p1_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_, \
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y) \
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y) \
 { \
     cfloat *output = output_; \
     const cfloat *input = input_; \
@@ -721,11 +721,11 @@ void MANGLE(mufft_ ## direction ## _radix4_p1_vert)(void * MUFFT_RESTRICT output
     (void)p; \
  \
     unsigned quarter_lines = samples_y >> 2; \
-    unsigned quarter_stride = samples_x * quarter_lines; \
+    unsigned quarter_stride = stride * quarter_lines; \
     const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
  \
     for (unsigned line = 0; line < quarter_lines; \
-            line++, input += samples_x, output += samples_x << 2) \
+            line++, input += stride, output += stride << 2) \
     { \
         for (unsigned i = 0; i < samples_x; i += VSIZE) \
         { \
@@ -746,9 +746,9 @@ void MANGLE(mufft_ ## direction ## _radix4_p1_vert)(void * MUFFT_RESTRICT output
             d = sub_ps(r1, r3); \
  \
             store_ps(&output[i], a); \
-            store_ps(&output[i + 1 * samples_x], b); \
-            store_ps(&output[i + 2 * samples_x], c); \
-            store_ps(&output[i + 3 * samples_x], d); \
+            store_ps(&output[i + 1 * stride], b); \
+            store_ps(&output[i + 2 * stride], c); \
+            store_ps(&output[i + 3 * stride], d); \
         } \
     } \
 }
@@ -756,19 +756,19 @@ RADIX4_P1_VERT(forward, 0.0f, -0.0f)
 RADIX4_P1_VERT(inverse, -0.0f, 0.0f)
 
 void MANGLE(mufft_radix4_generic_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
 
     unsigned quarter_lines = samples_y >> 2;
-    unsigned quarter_stride = samples_x * quarter_lines;
-    unsigned out_stride = p * samples_x;
+    unsigned quarter_stride = stride * quarter_lines;
+    unsigned out_stride = p * stride;
 
-    for (unsigned line = 0; line < quarter_lines; line++, input += samples_x)
+    for (unsigned line = 0; line < quarter_lines; line++, input += stride)
     {
         unsigned k = line & (p - 1);
-        unsigned j = (((line - k) << 2) + k) * samples_x;
+        unsigned j = (((line - k) << 2) + k) * stride;
 
         for (unsigned i = 0; i < samples_x; i += VSIZE)
         {
@@ -803,7 +803,7 @@ void MANGLE(mufft_radix4_generic_vert)(void * MUFFT_RESTRICT output_, const void
 
 #define RADIX8_P1_VERT(direction, twiddle_r, twiddle_i, twiddle8) \
 void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_, \
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y) \
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y) \
 { \
     cfloat *output = output_; \
     const cfloat *input = input_; \
@@ -811,13 +811,13 @@ void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void * MUFFT_RESTRICT output
     (void)twiddles; \
  \
     unsigned octa_lines = samples_y >> 3; \
-    unsigned octa_stride = samples_x * octa_lines; \
+    unsigned octa_stride = stride * octa_lines; \
     const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
     const MM w_f = splat_const_complex(+M_SQRT1_2, twiddle8); \
     const MM w_h = splat_const_complex(-M_SQRT1_2, twiddle8); \
  \
     for (unsigned line = 0; line < octa_lines; \
-            line++, input += samples_x, output += samples_x << 3) \
+            line++, input += stride, output += stride << 3) \
     { \
         for (unsigned i = 0; i < samples_x; i += VSIZE) \
         { \
@@ -863,13 +863,13 @@ void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void * MUFFT_RESTRICT output
             r7 = sub_ps(d, h); \
  \
             store_ps(&output[i], r0); \
-            store_ps(&output[i + 1 * samples_x], r1); \
-            store_ps(&output[i + 2 * samples_x], r2); \
-            store_ps(&output[i + 3 * samples_x], r3); \
-            store_ps(&output[i + 4 * samples_x], r4); \
-            store_ps(&output[i + 5 * samples_x], r5); \
-            store_ps(&output[i + 6 * samples_x], r6); \
-            store_ps(&output[i + 7 * samples_x], r7); \
+            store_ps(&output[i + 1 * stride], r1); \
+            store_ps(&output[i + 2 * stride], r2); \
+            store_ps(&output[i + 3 * stride], r3); \
+            store_ps(&output[i + 4 * stride], r4); \
+            store_ps(&output[i + 5 * stride], r5); \
+            store_ps(&output[i + 6 * stride], r6); \
+            store_ps(&output[i + 7 * stride], r7); \
         } \
     } \
 }
@@ -877,19 +877,19 @@ RADIX8_P1_VERT(forward, 0.0f, -0.0f, -M_SQRT1_2)
 RADIX8_P1_VERT(inverse, -0.0f, 0.0f, +M_SQRT1_2)
 
 void MANGLE(mufft_radix8_generic_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
-        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned samples_y)
+        const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)
 {
     cfloat *output = output_;
     const cfloat *input = input_;
 
     unsigned octa_lines = samples_y >> 3;
-    unsigned octa_stride = samples_x * octa_lines;
-    unsigned out_stride = p * samples_x;
+    unsigned octa_stride = stride * octa_lines;
+    unsigned out_stride = p * stride;
 
-    for (unsigned line = 0; line < octa_lines; line++, input += samples_x)
+    for (unsigned line = 0; line < octa_lines; line++, input += stride)
     {
         unsigned k = line & (p - 1);
-        unsigned j = (((line - k) << 3) + k) * samples_x;
+        unsigned j = (((line - k) << 3) + k) * stride;
 
         for (unsigned i = 0; i < samples_x; i += VSIZE)
         {

@@ -228,7 +228,7 @@ mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction,
 /// @param Ny The transform size in Y dimension (number of rows). Must be power-of-two and at least 2.
 /// @param flags Flags for the planning. See \ref MUFFT_FLAG. If \ref MUFFT_FLAG_FULL_R2C flag is added, the transform will output the full N complex frequency samples, instead of the minimum N / 2 + 1 samples.
 /// @returns A 2D transform plan, or `NULL` if an error occured.
-mufft_plan_2d *mufft_create_plan_2d_r2c(unsigned Nx, unsigned Ny, int direction, unsigned flags);
+mufft_plan_2d *mufft_create_plan_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags);
 
 
 /// \brief Executes a 2D FFT plan.

@@ -78,6 +78,11 @@ struct mufft_plan_2d
     cfloat *tmp_buffer; ///< A temporary buffer used during intermediate steps of the FFT.
     cfloat *twiddles_x; ///< Buffer holding twiddle factors used in the horizontal FFT.
     cfloat *twiddles_y; ///< Buffer holding twiddle factors used in the vertical FFT.
+
+    mufft_r2c_resolve_func r2c_resolve; ///< If non-NULL, a function to turn a N / 2 complex transform into a N-tap real transform.
+    mufft_r2c_resolve_func c2r_resolve; ///< If non-NULL, a function to turn a N real inverse transform into a N / 2 complex transform.
+    cfloat *r2c_twiddles; ///< Special twiddle factors used in mufft_plan_2d::r2c_resolve or mufft_plan_2d::c2r_resolve.
+    unsigned vertical_nx; ///< Number of columns we should process during vertical transform. Usually mufft_plan_2d::Nx, but might be smaller due to real-to-complex transform.
 };
 
 /// Represents a complete plan for a 1D fast convolution.
@@ -449,7 +454,7 @@ static cfloat *build_r2c_twiddles(int direction, unsigned N)
     return twiddles;
 }
 
-static void find_r2c_resolve_func(unsigned flags, unsigned N)
+static mufft_r2c_resolve_func find_r2c_resolve_func(unsigned flags, unsigned N)
 {
     // Add CPU flags. Just accept any CPU for now, but mask out flags we don't want.
     unsigned resolve_flags = mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
@@ -676,7 +681,15 @@ mufft_plan_2d *mufft_create_plan_2d_c2c(unsigned Nx, unsigned Ny, int direction,
         goto error;
     }
 
-    plan->tmp_buffer = mufft_alloc(Nx * Ny * sizeof(cfloat));
+    if ((flags & MUFFT_FLAG_R2C) != 0)
+    {
+        plan->tmp_buffer = mufft_alloc(2 * Nx * Ny * sizeof(cfloat));
+    }
+    else
+    {
+        plan->tmp_buffer = mufft_alloc(Nx * Ny * sizeof(cfloat));
+    }
+
     if (plan->tmp_buffer == NULL)
     {
         goto error;
@@ -701,6 +714,50 @@ error:
     mufft_free_plan_2d(plan);
     return NULL;
 }
+
+mufft_plan_2d *mufft_create_plan_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags)
+{
+    if ((Nx & (Nx - 1)) != 0 || (Ny & (Ny - 1)) != 0 || Nx == 1 || Ny == 1)
+    {
+        return NULL;
+    }
+
+    unsigned complex_n = Nx / 2;
+    mufft_plan_2d *plan = mufft_create_plan_2d_c2c(complex_n, Ny, MUFFT_FORWARD, flags | MUFFT_FLAG_R2C);
+    if (plan == NULL)
+    {
+        goto error;
+    }
+
+    plan->r2c_twiddles = build_r2c_twiddles(MUFFT_FORWARD, complex_n);
+    if (plan->r2c_twiddles == NULL)
+    {
+        goto error;
+    }
+
+    if ((flags & MUFFT_FLAG_FULL_R2C) == 0)
+    {
+        flags |= MUFFT_FLAG_R2C;
+        plan->vertical_nx = Nx / 2 + 1;
+    }
+    else
+    {
+        plan->vertical_nx = Nx;
+    }
+
+    plan->r2c_resolve = find_r2c_resolve_func(flags, Nx);
+    if (plan->r2c_resolve == NULL)
+    {
+        goto error;
+    }
+
+    return plan;
+
+error:
+    mufft_free_plan_2d(plan);
+    return NULL;
+}
+
 
 void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void *input)
 {
@@ -764,6 +821,9 @@ void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, co
     unsigned Nx = plan->Nx;
     unsigned Ny = plan->Ny;
 
+    // Since Nx is actually N / 2, this is either Nx + 1 or Nx * 2.
+    unsigned vertical_stride_x = plan->r2c_resolve != NULL ? 2 * Nx : Nx;
+
     cfloat *hout = output;
     cfloat *hin = plan->tmp_buffer;
     if ((plan->num_steps_y & 1) == 0)
@@ -799,7 +859,7 @@ void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, co
         // Do Real-to-complex butterfly resolve.
         if (plan->r2c_resolve != NULL)
         {
-            // Double the strides now
+            // Double the strides now.
             plan->r2c_resolve(tout + 2 * y * Nx, tin + y * Nx,
                     plan->r2c_twiddles, Nx);
             SWAP(tout, tin);
@@ -808,9 +868,7 @@ void mufft_execute_plan_2d(mufft_plan_2d *plan, void * MUFFT_RESTRICT output, co
         mufft_assert(tin == hin);
     }
 
-    unsigned stride_x = plan->r2c_resolve != NULL ? 2 * Nx : Nx;
     Nx = plan->vertical_nx; // Either N / 2 + 1 or N depending on our flags.
-    // Since Nx is actually N / 2, this is either Nx + 1 or Nx * 2.
 
     // Vertical transforms.
     const struct mufft_step_2d *first_step = &plan->steps_y[0];
@@ -851,6 +909,7 @@ void mufft_free_plan_2d(mufft_plan_2d *plan)
     mufft_free(plan->tmp_buffer);
     mufft_free(plan->twiddles_x);
     mufft_free(plan->twiddles_y);
+    mufft_free(plan->r2c_twiddles);
     mufft_free(plan);
 }
 
