@@ -130,6 +130,63 @@ static double bench_fftw_2d(unsigned Nx, unsigned Ny, unsigned iterations, unsig
     return end_time - start_time;
 }
 
+static double bench_fftw_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
+{
+    float *input = fftwf_malloc(Nx * Ny * sizeof(float));
+    complex float *output = fftwf_malloc(Nx * Ny * sizeof(complex float));
+
+    fftwf_plan plan = fftwf_plan_dft_r2c_2d(Ny, Nx, input, output, flags);
+
+    srand(0);
+    for (unsigned i = 0; i < Nx * Ny; i++)
+    {
+        float real = (float)rand() / RAND_MAX - 0.5f;
+        input[i] = real;
+    }
+
+    double start_time = mufft_get_time();
+    for (unsigned i = 0; i < iterations; i++)
+    {
+        fftwf_execute(plan);
+    }
+    double end_time = mufft_get_time();
+
+    fftwf_free(input);
+    fftwf_free(output);
+    fftwf_destroy_plan(plan);
+
+    return end_time - start_time;
+}
+
+static double bench_fftw_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
+{
+    complex float *input = fftwf_malloc(Nx * Ny * sizeof(complex float));
+    float *output = fftwf_malloc(2 * Nx * Ny * sizeof(float));
+
+    fftwf_plan plan = fftwf_plan_dft_c2r_2d(Ny, Nx, input, output, flags);
+
+    srand(0);
+    for (unsigned i = 0; i < Nx * Ny; i++)
+    {
+        float real = (float)rand() / RAND_MAX - 0.5f;
+        float imag = (float)rand() / RAND_MAX - 0.5f;
+        input[i] = real + _Complex_I * imag;
+    }
+
+    double start_time = mufft_get_time();
+    for (unsigned i = 0; i < iterations; i++)
+    {
+        fftwf_execute(plan);
+    }
+    double end_time = mufft_get_time();
+
+    fftwf_free(input);
+    fftwf_free(output);
+    fftwf_destroy_plan(plan);
+
+    return end_time - start_time;
+}
+
 static double bench_fft_1d(unsigned N, unsigned iterations, unsigned flags)
 {
     complex float *input = mufft_alloc(N * sizeof(complex float));
@@ -328,6 +385,63 @@ static double bench_fft_2d(unsigned Nx, unsigned Ny, unsigned iterations, unsign
     return end_time - start_time;
 }
 
+static double bench_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
+{
+    float *input = mufft_alloc(Nx * Ny * sizeof(float));
+    complex float *output = mufft_alloc(Nx * Ny * sizeof(complex float));
+
+    srand(0);
+    for (unsigned i = 0; i < Nx * Ny; i++)
+    {
+        float real = (float)rand() / RAND_MAX - 0.5f;
+        input[i] = real;
+    }
+
+    mufft_plan_2d *muplan = mufft_create_plan_2d_r2c(Nx, Ny, flags);
+
+    double start_time = mufft_get_time();
+    for (unsigned i = 0; i < iterations; i++)
+    {
+        mufft_execute_plan_2d(muplan, output, input);
+    }
+    double end_time = mufft_get_time();
+
+    mufft_free(input);
+    mufft_free(output);
+    mufft_free_plan_2d(muplan);
+
+    return end_time - start_time;
+}
+
+static double bench_fft_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
+{
+    complex float *input = mufft_alloc(Nx * Ny * sizeof(complex float));
+    float *output = mufft_alloc(2 * Nx * Ny * sizeof(float));
+
+    srand(0);
+    for (unsigned i = 0; i < Nx * Ny; i++)
+    {
+        float real = (float)rand() / RAND_MAX - 0.5f;
+        float imag = (float)rand() / RAND_MAX - 0.5f;
+        input[i] = real + _Complex_I * imag;
+    }
+
+    mufft_plan_2d *muplan = mufft_create_plan_2d_c2r(Nx, Ny, flags);
+
+    double start_time = mufft_get_time();
+    for (unsigned i = 0; i < iterations; i++)
+    {
+        mufft_execute_plan_2d(muplan, output, input);
+    }
+    double end_time = mufft_get_time();
+
+    mufft_free(input);
+    mufft_free(output);
+    mufft_free_plan_2d(muplan);
+
+    return end_time - start_time;
+}
+
 static void run_benchmark_1d(unsigned N, unsigned iterations)
 {
     double flops = 5.0 * N * log2(N); // Estimation
@@ -402,6 +516,46 @@ static void run_benchmark_2d(unsigned Nx, unsigned Ny, unsigned iterations)
             Nx, Ny, mufft_mflops, 1000000.0 * mufft_time / iterations);
 }
 
+static void run_benchmark_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations)
+{
+    double flops = 2.5 * Ny * Nx * log2(Nx) + 2.5 * Nx * Ny * log2(Ny); // Estimation
+    double fftw_time = bench_fftw_2d_r2c(Nx, Ny, iterations, FFTW_ESTIMATE);
+    double fftw_measured_time = bench_fftw_2d_r2c(Nx, Ny, iterations, FFTW_MEASURE);
+    double mufft_time = bench_fft_2d_r2c(Nx, Ny, iterations, 0);
+    flops *= iterations;
+
+    double fftw_mflops = flops / (1000000.0 * fftw_time);
+    double fftw_measured_mflops = flops / (1000000.0 * fftw_measured_time);
+    double mufft_mflops = flops / (1000000.0 * mufft_time);
+
+    printf("FFTW R2C estimate:      %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, fftw_mflops, 1000000.0 * fftw_time / iterations);
+    printf("FFTW R2C measure:       %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
+    printf("muFFT R2C:              %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, mufft_mflops, 1000000.0 * mufft_time / iterations);
+}
+
+static void run_benchmark_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations)
+{
+    double flops = 2.5 * Ny * Nx * log2(Nx) + 2.5 * Nx * Ny * log2(Ny); // Estimation
+    double fftw_time = bench_fftw_2d_c2r(Nx, Ny, iterations, FFTW_ESTIMATE);
+    double fftw_measured_time = bench_fftw_2d_c2r(Nx, Ny, iterations, FFTW_MEASURE);
+    double mufft_time = bench_fft_2d_c2r(Nx, Ny, iterations, 0);
+    flops *= iterations;
+
+    double fftw_mflops = flops / (1000000.0 * fftw_time);
+    double fftw_measured_mflops = flops / (1000000.0 * fftw_measured_time);
+    double mufft_mflops = flops / (1000000.0 * mufft_time);
+
+    printf("FFTW C2R estimate:      %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, fftw_mflops, 1000000.0 * fftw_time / iterations);
+    printf("FFTW C2R measure:       %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
+    printf("muFFT C2R:              %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
+            Nx, Ny, mufft_mflops, 1000000.0 * mufft_time / iterations);
+}
+
 int main(int argc, char *argv[])
 {
     if (argc == 2 || argc > 4)
@@ -444,6 +598,8 @@ int main(int argc, char *argv[])
         unsigned Nx = strtoul(argv[2], NULL, 0);
         unsigned Ny = strtoul(argv[3], NULL, 0);
         run_benchmark_2d(Nx, Ny, iterations);
+        run_benchmark_2d_r2c(Nx, Ny, iterations);
+        run_benchmark_2d_c2r(Nx, Ny, iterations);
     }
 
     fftwf_cleanup();
