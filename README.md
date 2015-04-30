@@ -1,6 +1,6 @@
 # muFFT
 
-muFFT is a library for doing the fast fourier transform (FFT).
+muFFT is a library for doing the fast fourier transform (FFT) in one or two dimensions.
 The FFT has many applications in digital signal processing.
 The main use cases are fast linear convolution and conversion from time domain into frequency domain and vice versa.
 See [The Fast Fourier Transform](@ref FFT) for details on how the algorithm works and how it is implemented in muFFT.
@@ -11,10 +11,9 @@ muFFT is a moderately featured single-precision FFT library.
 It focuses particularly on linear convolution for audio applications and being optimized for modern architectures.
 
  - Power-of-two transforms
- - 1D complex-to-complex transform
- - 1D real-to-complex transform
- - 1D complex-to-real transform
- - 2D complex-to-complex transform
+ - 1D/2D complex-to-complex transform
+ - 1D/2D real-to-complex transform
+ - 1D/2D complex-to-real transform
  - 1D fast convolution for applying large filters.
    Supports both complex/real convolutions and real/real convolutions.
    The complex/real convolution is particularly useful for filtering interleaved stereo audio.
@@ -31,7 +30,7 @@ It focuses particularly on linear convolution for audio applications and being o
 
 muFFT uses the C99 and C++ ABI for complex numbers, interleaved real and imaginary samples, i.e.:
 
-    struct mufft_complex {
+    struct complex_float {
         float real;
         float imag;
     };
@@ -40,16 +39,19 @@ C99 `complex float` from `<complex.h>` and C++ `std::complex<float>` from `<comp
 
 ## Performance 
 
-muFFT is very performant and is competitive with highly optimized libraries like FFTW3 and FFmpeg/libavcodec FFT on tested hardware.
+muFFT is written for performance and is usually competitive with highly optimized libraries like FFTW3 and FFmpeg/libavcodec FFT.
 See [Benchmark](#benchmark) for how to run your own benchmarks.
 
 muFFT is designed with moderate size FFTs in mind.
 Very large FFTs which don't fit in cache could be better optimized by designing for cache utilization
 and tiny FFTs (N = 2, 4, 8) don't have special handcoded vectorized transforms.
 
+muFFT does not need to run micro benchmarks ahead of time to determine optimal FFT decompositions,
+as is supported in more sophisticated FFT libraries. Reasonable decompositions are found statically.
+
 ## License
 
-muFFT is licensed under the permissive MIT license.
+The muFFT library is licensed under the permissive MIT license, see COPYING and preambles in source files for more detail.
 
 Note that the `mufft_bench` and `mufft_test` binaries link against FFTW3 for verification purposes, a GPLv2+ library.
 If you choose to distribute either of these binaries, muFFT source must be provided as well.
@@ -107,5 +109,4 @@ The benchmark for 1D tests various things:
 The FFTW3 library must be present on your system via `pkg-config fftw3f --libs` when building this.
 Note that FFTW3 (as of writing) is licensed under GPLv2+.
 The `mufft_bench` binary falls under licensing requirements of GPLv2 as per FFTW3 license.
-
 
