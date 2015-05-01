@@ -125,6 +125,8 @@ OBJECTS_BENCH := \
 
 DEPS := $(OBJECTS_SHARED:.o=.d) $(OBJECTS_STATIC:.o=.d) $(OBJECTS_TEST:.o=.d)
 
+-include $(DEPS)
+
 all: static shared
 
 static: $(TARGET_STATIC)
@@ -135,7 +137,6 @@ test: $(TARGET_TEST)
 
 bench: $(TARGET_BENCH)
 
--include $(DEPS)
 
 $(TARGET_TEST): static $(OBJECTS_TEST)
 	$(CC) -o $@ $(OBJECTS_TEST) $(TARGET_OUT_STATIC) $(shell pkg-config fftw3f --libs) $(LDFLAGS)

@@ -90,7 +90,7 @@ struct mufft_plan_conv
 {
     mufft_plan_1d *plans[2]; ///< 1D FFT plans for first and second inputs.
     mufft_plan_1d *output_plan; ///< 1D FFT plan for inverse FFT.
-    void *block[2]; ///< Buffer for FFT output of first and second inputs.
+    size_t block_size; ///< Size required to hold output of mufft_execute_conv_input.
     void *conv_block; ///< Buffer for the result of multiplying the two buffers in mufft_plan_conv::block.
     float normalization; ///< Normalization factor 1 / N.
 
@@ -569,32 +569,27 @@ mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned met
     switch (method & 1)
     {
         case MUFFT_CONV_METHOD_FLAG_MONO_MONO:
+            conv->block_size = (N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat);
             conv->plans[0] = mufft_create_plan_1d_r2c(N, flags | first_extra_flag);
             conv->plans[1] = mufft_create_plan_1d_r2c(N, flags | second_extra_flag);
             conv->output_plan = mufft_create_plan_1d_c2r(N, flags);
-            conv->block[0] = mufft_calloc((N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat));
-            conv->block[1] = mufft_calloc((N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat));
-            conv->conv_block = mufft_calloc((N / 2 + MUFFT_PADDING_COMPLEX_SAMPLES) * sizeof(cfloat));
             conv->conv_multiply_n = N / 2 + 1;
             break;
 
         case MUFFT_CONV_METHOD_FLAG_STEREO_MONO:
+            conv->block_size = N * sizeof(cfloat);
             conv->plans[0] = mufft_create_plan_1d_c2c(N, MUFFT_FORWARD, flags | first_extra_flag);
             conv->plans[1] = mufft_create_plan_1d_r2c(N, flags | second_extra_flag | MUFFT_FLAG_FULL_R2C);
             conv->output_plan = mufft_create_plan_1d_c2c(N, MUFFT_INVERSE, flags);
-            conv->block[0] = mufft_calloc(N * sizeof(cfloat));
-            conv->block[1] = mufft_calloc(N * sizeof(cfloat));
-            conv->conv_block = mufft_calloc(N * sizeof(cfloat));
             conv->conv_multiply_n = N;
             break;
     }
 
     conv->normalization = 1.0f / N;
+    conv->conv_block = mufft_calloc(conv->block_size);
 
     if (conv->plans[0] == NULL ||
             conv->plans[1] == NULL ||
-            conv->block[0] == NULL ||
-            conv->block[1] == NULL ||
             conv->conv_block == NULL ||
             conv->output_plan == NULL)
     {
@@ -791,14 +786,19 @@ error:
     return NULL;
 }
 
-void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void *input)
+size_t mufft_conv_get_transformed_block_size(mufft_plan_conv *plan)
 {
-    mufft_execute_plan_1d(plan->plans[block], plan->block[block], input);
+    return plan->block_size;
 }
 
-void mufft_execute_conv_output(mufft_plan_conv *plan, void *output)
+void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, void *output, const void *input)
 {
-    plan->convolve_func(plan->conv_block, plan->block[0], plan->block[1],
+    mufft_execute_plan_1d(plan->plans[block], output, input);
+}
+
+void mufft_execute_conv_output(mufft_plan_conv *plan, void *output, const void *input_first, const void *input_second)
+{
+    plan->convolve_func(plan->conv_block, input_first, input_second,
             plan->normalization, plan->conv_multiply_n);
     mufft_execute_plan_1d(plan->output_plan, output, plan->conv_block);
 }
@@ -1020,8 +1020,6 @@ void mufft_free_plan_conv(mufft_plan_conv *plan)
     mufft_free_plan_1d(plan->plans[0]);
     mufft_free_plan_1d(plan->plans[1]);
     mufft_free_plan_1d(plan->output_plan);
-    mufft_free(plan->block[0]);
-    mufft_free(plan->block[1]);
     mufft_free(plan->conv_block);
     mufft_free(plan);
 }

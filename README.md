@@ -68,8 +68,8 @@ After running Doxygen, documents are found in `docs/index.html`.
 
 ## Sample code
 
-There is currently no dedicated sample code for muFFT. See `test.c` and the documentation for reference on how to use the API.
-The various test routines flex most of the API. It it also a good way to see how the API calls match up to equivalent FFTW3 routines.
+There is currently no dedicated sample code for muFFT. See `test.c`, `bench.c` and the documentation for reference on how to use the API.
+The various test and benchmark routines flex most of the API. It it also a good way to see how the API calls match up to equivalent FFTW3 routines.
 
 ## Unit tests
 

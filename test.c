@@ -413,9 +413,12 @@ static void test_conv(unsigned N, unsigned flags)
     mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_FLAG_MONO_MONO | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
     mufft_assert(plan != NULL);
 
-    mufft_execute_conv_input(plan, 0, a);
-    mufft_execute_conv_input(plan, 1, b);
-    mufft_execute_conv_output(plan, output);
+    void *block0 = mufft_calloc(mufft_conv_get_transformed_block_size(plan));
+    void *block1 = mufft_calloc(mufft_conv_get_transformed_block_size(plan));
+
+    mufft_execute_conv_input(plan, 0, block0, a);
+    mufft_execute_conv_input(plan, 1, block1, b);
+    mufft_execute_conv_output(plan, output, block0, block1);
 
     convolve_float(ref_output, a, b, N / 2);
 
@@ -428,6 +431,8 @@ static void test_conv(unsigned N, unsigned flags)
 
     mufft_free(a);
     mufft_free(b);
+    mufft_free(block0);
+    mufft_free(block1);
     mufft_free(output);
     mufft_free(ref_output);
     mufft_free_plan_conv(plan);
@@ -452,9 +457,12 @@ static void test_conv_stereo(unsigned N, unsigned flags)
     mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_FLAG_STEREO_MONO | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
     mufft_assert(plan != NULL);
 
-    mufft_execute_conv_input(plan, 0, a);
-    mufft_execute_conv_input(plan, 1, b);
-    mufft_execute_conv_output(plan, output);
+    void *block0 = mufft_calloc(mufft_conv_get_transformed_block_size(plan));
+    void *block1 = mufft_calloc(mufft_conv_get_transformed_block_size(plan));
+
+    mufft_execute_conv_input(plan, 0, block0, a);
+    mufft_execute_conv_input(plan, 1, block1, b);
+    mufft_execute_conv_output(plan, output, block0, block1);
     convolve_complex(ref_output, a, b, N / 2);
 
     const float epsilon = 0.000002f * sqrtf(N);
@@ -466,6 +474,8 @@ static void test_conv_stereo(unsigned N, unsigned flags)
 
     mufft_free(a);
     mufft_free(b);
+    mufft_free(block0);
+    mufft_free(block1);
     mufft_free(output);
     mufft_free(ref_output);
     mufft_free_plan_conv(plan);

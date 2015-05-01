@@ -174,8 +174,15 @@ mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned met
 ///
 /// @param plan Convolution instance
 /// @param block Which block to forward FFT transform. \ref MUFFT_CONV_BLOCK_FIRST or \ref MUFFT_CONV_BLOCK_SECOND are accepted. Which input is first and second is arbitrary and up to the API user.
+/// @param output The FFT of input. Its required buffer size can be queried with mufft_conv_get_transformed_block_size.
 /// @param input Input data to be transformed. Must be aligned to a boundary which matches with the SIMD instruction set used by your hardware, typically 16 or 32 bytes. Use \ref MUFFT_MEMORY to allocate properly aligned memory. Depending on the convolution method used, this input array is either treated as a complex array or real array with length either N or N / 2 if zero padding is used.
-void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void *input);
+void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, void *output, const void *input);
+
+/// \brief Queries the buffer size for intermediate FFT blocks.
+///
+/// @param plan Convolution instance
+/// @returns The number of bytes required to hold the output of mufft_execute_conv_input. Can be passed directly to mufft_calloc.
+size_t mufft_conv_get_transformed_block_size(mufft_plan_conv *plan);
 
 /// \brief Multiply together FFTs of the two input arrays obtained from \ref mufft_execute_conv_input and perform a normalized inverse FFT.
 ///
@@ -183,7 +190,7 @@ void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, const void 
 ///
 /// @param plan Convolution instance
 /// @param output Output data. Must be aligned to a boundary which matches with the SIMD instruction set used by your hardware, typically 16 or 32 bytes. Use \ref MUFFT_MEMORY to allocate properly aligned memory. Depending on the convolution method used, the type of output is either treated as a complex array or real array of length N.
-void mufft_execute_conv_output(mufft_plan_conv *plan, void *output);
+void mufft_execute_conv_output(mufft_plan_conv *plan, void *output, const void *input_first, const void *input_second);
 
 /// \brief Free a previously allocated convolution plan obtained from \ref mufft_create_plan_conv.
 void mufft_free_plan_conv(mufft_plan_conv *plan);

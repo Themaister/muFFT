@@ -234,17 +234,22 @@ static double bench_fft_conv(unsigned N, unsigned iterations, unsigned flags)
             MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST |
             MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
 
-    mufft_execute_conv_input(plan, 1, b);
+    void *block0 = mufft_calloc(mufft_conv_get_transformed_block_size(plan));
+    void *block1 = mufft_calloc(mufft_conv_get_transformed_block_size(plan));
+
+    mufft_execute_conv_input(plan, 1, block1, b);
     double start_time = mufft_get_time();
     for (unsigned i = 0; i < iterations; i++)
     {
-        mufft_execute_conv_input(plan, 0, a);
-        mufft_execute_conv_output(plan, output);
+        mufft_execute_conv_input(plan, 0, block0, a);
+        mufft_execute_conv_output(plan, output, block0, block1);
     }
     double end_time = mufft_get_time();
 
     mufft_free(a);
     mufft_free(b);
+    mufft_free(block0);
+    mufft_free(block1);
     mufft_free(output);
     mufft_free_plan_conv(plan);
 
@@ -271,17 +276,22 @@ static double bench_fft_conv_stereo(unsigned N, unsigned iterations, unsigned fl
             MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST |
             MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
 
-    mufft_execute_conv_input(plan, 1, b);
+    void *block0 = mufft_calloc(mufft_conv_get_transformed_block_size(plan));
+    void *block1 = mufft_calloc(mufft_conv_get_transformed_block_size(plan));
+
+    mufft_execute_conv_input(plan, 1, block1, b);
     double start_time = mufft_get_time();
     for (unsigned i = 0; i < iterations; i++)
     {
-        mufft_execute_conv_input(plan, 0, a);
-        mufft_execute_conv_output(plan, output);
+        mufft_execute_conv_input(plan, 0, block0, a);
+        mufft_execute_conv_output(plan, output, block0, block1);
     }
     double end_time = mufft_get_time();
 
     mufft_free(a);
     mufft_free(b);
+    mufft_free(block0);
+    mufft_free(block1);
     mufft_free(output);
     mufft_free_plan_conv(plan);
 
