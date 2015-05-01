@@ -181,7 +181,7 @@ void mufft_execute_conv_input(mufft_plan_conv *plan, unsigned block, void *outpu
 /// \brief Queries the buffer size for intermediate FFT blocks.
 ///
 /// @param plan Convolution instance
-/// @returns The number of bytes required to hold the output of mufft_execute_conv_input. Can be passed directly to mufft_calloc.
+/// @returns The number of bytes required to hold the output of mufft_execute_conv_input. Can be passed directly to \ref MUFFT_MEMORY.
 size_t mufft_conv_get_transformed_block_size(mufft_plan_conv *plan);
 
 /// \brief Multiply together FFTs of the two input arrays obtained from \ref mufft_execute_conv_input and perform a normalized inverse FFT.
@@ -190,6 +190,8 @@ size_t mufft_conv_get_transformed_block_size(mufft_plan_conv *plan);
 ///
 /// @param plan Convolution instance
 /// @param output Output data. Must be aligned to a boundary which matches with the SIMD instruction set used by your hardware, typically 16 or 32 bytes. Use \ref MUFFT_MEMORY to allocate properly aligned memory. Depending on the convolution method used, the type of output is either treated as a complex array or real array of length N.
+/// @param input_first The output obtained earlier by mufft_execute_conv_input for \ref MUFFT_CONV_BLOCK_FIRST.
+/// @param input_second The output obtained earlier by mufft_execute_conv_input for \ref MUFFT_CONV_BLOCK_SECOND.
 void mufft_execute_conv_output(mufft_plan_conv *plan, void *output, const void *input_first, const void *input_second);
 
 /// \brief Free a previously allocated convolution plan obtained from \ref mufft_create_plan_conv.
