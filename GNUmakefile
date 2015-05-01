@@ -122,7 +122,7 @@ OBJECTS_TEST := \
 
 OBJECTS_BENCH := \
 	$(addprefix $(OBJDIR_STATIC)/,$(SOURCES_BENCH:.c=.o))
-
+  
 DEPS := $(OBJECTS_SHARED:.o=.d) $(OBJECTS_STATIC:.o=.d) $(OBJECTS_TEST:.o=.d)
 
 -include $(DEPS)
@@ -204,29 +204,57 @@ clean-all:
 	$(SED) -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@VERSION@|$(VERSION)|g' > $@ < $<
 
 install-header:
-	$(MKDIR) -p $(PREFIX)/include/mufft
-	$(INSTALL) -m644 fft.h $(PREFIX)/include/mufft
+	$(MKDIR) -p $(BASEDIR)$(PREFIX)/include/mufft
+	$(INSTALL) -m644 fft.h $(BASEDIR)$(PREFIX)/include/mufft
 
 install-pkgconfig: $(PKGCONF_FILE)
-	$(MKDIR) -p $(PREFIX)/lib/pkgconfig
-	$(INSTALL) -m644 $(PKGCONF_FILE) $(PREFIX)/lib/pkgconfig
+	$(MKDIR) -p $(BASEDIR)$(PREFIX)/lib/pkgconfig
+	$(INSTALL) -m644 $(PKGCONF_FILE) $(BASEDIR)$(PREFIX)/lib/pkgconfig
 
 install-static: static install-pkgconfig install-header
-	$(MKDIR) -p $(PREFIX)/lib
-	$(MKDIR) -p $(PREFIX)/lib/pkgconfig
-	$(INSTALL) -m644 $(TARGET_STATIC) $(PREFIX)/lib
+	$(MKDIR) -p $(BASEDIR)$(PREFIX)/lib
+	$(MKDIR) -p $(BASEDIR)$(PREFIX)/lib/pkgconfig
+	$(INSTALL) -m644 $(TARGET_STATIC) $(BASEDIR)$(PREFIX)/lib
 
 install-shared: shared install-pkgconfig install-header
-	$(MKDIR) -p $(PREFIX)/lib
-	$(INSTALL) -m644 $(TARGET_SHARED) $(PREFIX)/lib
+	$(MKDIR) -p $(BASEDIR)$(PREFIX)/lib
+	$(INSTALL) -m644 $(TARGET_SHARED) $(BASEDIR)$(PREFIX)/lib
 
 install-docs: docs
-	$(MKDIR) -p $(PREFIX)/share/doc/mufft
-	$(CP) -r docs/* $(PREFIX)/share/doc/mufft
+	$(MKDIR) -p $(BASEDIR)$(PREFIX)/share/doc/mufft
+	$(CP) -r docs/* $(BASEDIR)$(PREFIX)/share/doc/mufft
 
 install-nodocs: install-static install-shared
 
 install: install-nodocs install-docs
 
-.PHONY: all docs test shared static clean clean-all bench install install-header install-pkgconfig install-static install-shared install-docs install-nodocs
+help:
+	@echo "Building:"
+	@echo "    make                                        Builds static and shared library variants"
+	@echo "    make docs                                   Builds documentation"
+	@echo "    make static                                 Only build static library"
+	@echo "    make shared                                 Only build shared library"
+	@echo "    make DEBUG=1                                Build for debugging"
+	@echo "    make PLATFORM=platform                      Build for specific platform"
+	@echo "    make TOOLCHAIN_PREFIX=arm-linux-gnueabihf-  Use specific compiler toolchain (cross compilation)"
+	@echo "    make install PREFIX=/usr                    Install muFFT with documentation to /usr/{lib,include,share/doc}"
+	@echo "    make install BASEDIR=pkg/                   Install muFFT to a different base directory. Useful for packaging, etc."
+	@echo "    make clean                                  Clean build"
+	@echo ""
+	@echo "Current values:"
+	@echo "    PREFIX=$(PREFIX)"
+	@echo "    BASEDIR=$(BASEDIR)"
+	@echo "    PLATFORM=$(PLATFORM)"
+	@echo "    DEBUG=$(DEBUG)"
+	@echo "    ARCH=$(ARCH)"
+	@echo "    TOOLCHAIN_PREFIX=$(TOOLCHAIN_PREFIX)"
+	@echo "    SIMD_ENABLE=$(SIMD_ENABLE)"
+	@echo "    SANITIZE=$(SANITIZE)"
+	@echo ""
+	@echo "Platforms:"
+	@echo "    unix  Linux/BSD, etc"
+	@echo "    osx   Mac OSX"
+	@echo "    win   Windows (32-bit/64-bit)"
+
+.PHONY: all docs test shared static clean clean-all bench install install-header install-pkgconfig install-static install-shared install-docs install-nodocs help
 

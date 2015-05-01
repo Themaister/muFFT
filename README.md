@@ -26,6 +26,20 @@ It focuses particularly on linear convolution for audio applications and being o
  - Detects SIMD support for your hardware in runtime.
    Same muFFT binary can support wide ranges of hardware feature sets.
 
+## Building
+
+muFFT is built with straight GNU make.
+Run `make help` to see options.
+
+
+### Linking against muFFT
+
+muFFT installs a pkg-config file to `$(PREFIX)/lib/pkg-config`.
+To get appropriate CFLAGS and LDFLAGS:
+
+    pkg-config mufft --libs
+    pkg-config mufft --cflags
+
 ## Complex number representation
 
 muFFT uses the C99 and C++ ABI for complex numbers, interleaved real and imaginary samples, i.e.:
