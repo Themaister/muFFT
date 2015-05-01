@@ -12,6 +12,16 @@ endif
 endif
 
 CP := cp
+MKDIR := mkdir
+INSTALL := install
+SED := sed
+RM := rm
+DOXYGEN := doxygen
+
+PKGCONF_FILE := mufft.pc
+VERSION := 0.1
+
+PREFIX = /usr/local
 
 CFLAGS += -std=gnu99 -Wall -Wextra
 LDFLAGS += -lm -Wl,-no-undefined
@@ -140,54 +150,82 @@ $(TARGET_STATIC): $(TARGET_OUT_STATIC)
 	$(CP) $< $@
 
 $(TARGET_OUT_SHARED): $(OBJECTS_SHARED)
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -o $@ $^ $(LDFLAGS) $(FPIC) $(SHARED)
 
 $(TARGET_OUT_STATIC): $(OBJECTS_STATIC)
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(AR) rcs $@ $^
 
 $(OBJDIR_SHARED)/%.sse.o: %.c
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -mno-sse3 -mno-avx $(FPIC)
 
 $(OBJDIR_SHARED)/%.sse3.o: %.c
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -msse3 -mno-avx $(FPIC)
 
 $(OBJDIR_SHARED)/%.avx.o: %.c
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -msse3 -mavx $(FPIC)
 
 $(OBJDIR_SHARED)/%.o: %.c
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD $(FPIC)
 
 $(OBJDIR_STATIC)/%.sse.o: %.c
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -mno-sse3 -mno-avx
 
 $(OBJDIR_STATIC)/%.sse3.o: %.c
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -msse3 -mno-avx
 
 $(OBJDIR_STATIC)/%.avx.o: %.c
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD -msse -msse3 -mavx
 
 $(OBJDIR_STATIC)/%.o: %.c
-	@mkdir -p $(dir $@)
+	@$(MKDIR) -p $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS) -MMD
 
 docs:
-	doxygen
+	$(DOXYGEN)
 
 clean:
-	rm -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC) $(TARGET_TEST) $(TARGET_BENCH)
-	rm -rf $(OBJDIR_SHARED) $(OBJDIR_STATIC)
+	$(RM) -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC) $(TARGET_TEST) $(TARGET_BENCH)
+	$(RM) -rf $(OBJDIR_SHARED) $(OBJDIR_STATIC)
 
 clean-all:
-	rm -rf bin obj-shared obj-static
+	$(RM) -rf bin obj-shared obj-static $(PKGCONF_FILE)
 
-.PHONY: all docs test shared static clean clean-all bench
+%.pc: %.pc.in
+	$(SED) -e 's|@PREFIX@|$(PREFIX)|g' -e 's|@VERSION@|$(VERSION)|g' > $@ < $<
+
+install-header:
+	$(MKDIR) -p $(PREFIX)/include/mufft
+	$(INSTALL) -m644 fft.h $(PREFIX)/include/mufft
+
+install-pkgconfig: $(PKGCONF_FILE)
+	$(MKDIR) -p $(PREFIX)/lib/pkgconfig
+	$(INSTALL) -m644 $(PKGCONF_FILE) $(PREFIX)/lib/pkgconfig
+
+install-static: static install-pkgconfig install-header
+	$(MKDIR) -p $(PREFIX)/lib
+	$(MKDIR) -p $(PREFIX)/lib/pkgconfig
+	$(INSTALL) -m644 $(TARGET_STATIC) $(PREFIX)/lib
+
+install-shared: shared install-pkgconfig install-header
+	$(MKDIR) -p $(PREFIX)/lib
+	$(INSTALL) -m644 $(TARGET_SHARED) $(PREFIX)/lib
+
+install-docs: docs
+	$(MKDIR) -p $(PREFIX)/share/doc/mufft
+	$(CP) -r docs/* $(PREFIX)/share/doc/mufft
+
+install-nodocs: install-static install-shared
+
+install: install-nodocs install-docs
+
+.PHONY: all docs test shared static clean clean-all bench install install-header install-pkgconfig install-static install-shared install-docs install-nodocs
 

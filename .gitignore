@@ -4,6 +4,7 @@
 *.dylib
 *.a
 *.exe
+*.pc
 /bin
 /obj
 /obj-static
