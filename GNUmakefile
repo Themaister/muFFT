@@ -17,9 +17,12 @@ INSTALL := install
 SED := sed
 RM := rm
 DOXYGEN := doxygen
+LN := ln
 
 PKGCONF_FILE := mufft.pc
-VERSION := 0.1
+VERSION_MAJOR := 0
+VERSION_MINOR := 1
+VERSION := $(VERSION_MAJOR).$(VERSION_MINOR)
 
 PREFIX = /usr/local
 
@@ -40,8 +43,11 @@ else ifeq ($(PLATFORM),osx)
 	TARGET_STATIC := libmufft.a
 else
 	FPIC := -fPIC
-	SHARED := -shared
-	TARGET_SHARED := libmufft.so
+	TARGET_SHARED_SONAME := libmufft.so.$(VERSION_MAJOR)
+	TARGET_SHARED_SONAME_LONG := libmufft.so.$(VERSION)
+	TARGET_SHARED_SONAME_SHORT := libmufft.so
+	TARGET_SHARED := $(TARGET_SHARED_SONAME_LONG)
+	SHARED := -shared -Wl,-soname,$(TARGET_SHARED_SONAME)
 	TARGET_STATIC := libmufft.a
 endif
 
@@ -125,7 +131,6 @@ OBJECTS_BENCH := \
   
 DEPS := $(OBJECTS_SHARED:.o=.d) $(OBJECTS_STATIC:.o=.d) $(OBJECTS_TEST:.o=.d)
 
--include $(DEPS)
 
 all: static shared
 
@@ -137,6 +142,7 @@ test: $(TARGET_TEST)
 
 bench: $(TARGET_BENCH)
 
+-include $(DEPS)
 
 $(TARGET_TEST): static $(OBJECTS_TEST)
 	$(CC) -o $@ $(OBJECTS_TEST) $(TARGET_OUT_STATIC) $(shell pkg-config fftw3f --libs) $(LDFLAGS)
@@ -146,6 +152,10 @@ $(TARGET_BENCH): static $(OBJECTS_BENCH)
 
 $(TARGET_SHARED): $(TARGET_OUT_SHARED)
 	$(CP) $< $@
+ifeq ($(PLATFORM), unix)
+	$(LN) -sf $(TARGET_SHARED) $(TARGET_SHARED_SONAME)
+	$(LN) -sf $(TARGET_SHARED) $(TARGET_SHARED_SONAME_SHORT)
+endif
 
 $(TARGET_STATIC): $(TARGET_OUT_STATIC)
 	$(CP) $< $@
@@ -194,7 +204,7 @@ docs:
 	$(DOXYGEN)
 
 clean:
-	$(RM) -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC) $(TARGET_TEST) $(TARGET_BENCH)
+	$(RM) -f $(TARGET_OUT_SHARED) $(TARGET_OUT_STATIC) $(TARGET_TEST) $(TARGET_BENCH) $(TARGET_SHARED_SONAME) $(TARGET_SHARED_SONAME_SHORT)
 	$(RM) -rf $(OBJDIR_SHARED) $(OBJDIR_STATIC)
 
 clean-all:
@@ -219,6 +229,10 @@ install-static: static install-pkgconfig install-header
 install-shared: shared install-pkgconfig install-header
 	$(MKDIR) -p $(BASEDIR)$(PREFIX)/lib
 	$(INSTALL) -m644 $(TARGET_SHARED) $(BASEDIR)$(PREFIX)/lib
+ifeq ($(PLATFORM), unix)
+	$(CP) -a $(TARGET_SHARED_SONAME) $(BASEDIR)$(PREFIX)/lib
+	$(CP) -a $(TARGET_SHARED_SONAME_SHORT) $(BASEDIR)$(PREFIX)/lib
+endif
 
 install-docs: docs
 	$(MKDIR) -p $(BASEDIR)$(PREFIX)/share/doc/mufft
