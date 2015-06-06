@@ -65,7 +65,7 @@ ifeq ($(DEBUG), 1)
 	CFLAGS += -O0 -g -DMUFFT_DEBUG
 else
 	CONFIG := release
-	CFLAGS += -Ofast
+	CFLAGS += -O3
 endif
 
 ifeq ($(SANITIZE), 1)
