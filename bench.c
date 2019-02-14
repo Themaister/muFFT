@@ -25,7 +25,17 @@
 
 #include <fftw3.h> // Used as a reference.
 
-// TODO: Portable
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+static double mufft_get_time(void)
+{
+	LARGE_INTEGER cnt, freq;
+	QueryPerformanceCounter(&cnt);
+	QueryPerformanceFrequency(&freq);
+	return (double)cnt.QuadPart / (double)freq.QuadPart;
+}
+#else
 #include <time.h>
 static double mufft_get_time(void)
 {
@@ -33,6 +43,7 @@ static double mufft_get_time(void)
     clock_gettime(CLOCK_MONOTONIC, &tv);
     return tv.tv_sec + tv.tv_nsec / 1000000000.0;
 }
+#endif
 
 static double bench_fftw_1d(unsigned N, unsigned iterations, unsigned flags)
 {
@@ -470,6 +481,7 @@ static void run_benchmark_1d(unsigned N, unsigned iterations)
             N, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
     printf("muFFT C2C:              %06u %12.3f Mflops %12.3f us iteration\n",
             N, mufft_mflops, 1000000.0 * mufft_time / iterations);
+    fflush(stdout);
 }
 
 static void run_benchmark_conv(unsigned N, unsigned iterations)
@@ -480,6 +492,7 @@ static void run_benchmark_conv(unsigned N, unsigned iterations)
             N, 1000000.0 * mufft_time / iterations);
     printf("muFFT conv stereo:      %06u %12.3f us iteration\n",
             N, 1000000.0 * mufft_stereo_time / iterations);
+    fflush(stdout);
 }
 
 static void run_benchmark_1d_real(unsigned N, unsigned iterations)
@@ -504,6 +517,7 @@ static void run_benchmark_1d_real(unsigned N, unsigned iterations)
             N, mufft_mflops, 1000000.0 * mufft_time / iterations);
     printf("muFFT half R2C-C2R:     %06u %12.3f Mflops %12.3f us iteration\n",
             N, mufft_half_mflops, 1000000.0 * mufft_half_time / iterations);
+    fflush(stdout);
 }
 
 static void run_benchmark_2d(unsigned Nx, unsigned Ny, unsigned iterations)
@@ -524,6 +538,7 @@ static void run_benchmark_2d(unsigned Nx, unsigned Ny, unsigned iterations)
             Nx, Ny, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
     printf("muFFT:                  %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
             Nx, Ny, mufft_mflops, 1000000.0 * mufft_time / iterations);
+    fflush(stdout);
 }
 
 static void run_benchmark_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations)
@@ -544,6 +559,7 @@ static void run_benchmark_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations)
             Nx, Ny, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
     printf("muFFT R2C:              %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
             Nx, Ny, mufft_mflops, 1000000.0 * mufft_time / iterations);
+    fflush(stdout);
 }
 
 static void run_benchmark_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations)
@@ -564,6 +580,7 @@ static void run_benchmark_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations)
             Nx, Ny, fftw_measured_mflops, 1000000.0 * fftw_measured_time / iterations);
     printf("muFFT C2R:              %04u by %04u, %12.3f Mflops %12.3f us iteration\n",
             Nx, Ny, mufft_mflops, 1000000.0 * mufft_time / iterations);
+    fflush(stdout);
 }
 
 int main(int argc, char *argv[])

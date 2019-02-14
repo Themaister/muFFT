@@ -49,9 +49,9 @@
 #define storeu_ps(addr, x) _mm256_storeu_ps((float*)(addr), x)
 #define splat_const_complex(real, imag) _mm256_set_ps(imag, real, imag, real, imag, real, imag, real)
 #define splat_const_dual_complex(a, b, real, imag) _mm256_set_ps(imag, real, b, a, imag, real, b, a)
-#define splat_complex(addr) ((__m256)_mm256_broadcast_sd((const double*)(addr)))
-#define unpacklo_pd(a, b) ((__m256)_mm256_unpacklo_pd((__m256d)(a), (__m256d)(b)))
-#define unpackhi_pd(a, b) ((__m256)_mm256_unpackhi_pd((__m256d)(a), (__m256d)(b)))
+#define splat_complex(addr) (_mm256_castpd_ps(_mm256_broadcast_sd((const double*)(addr))))
+#define unpacklo_pd(a, b) (_mm256_castpd_ps(_mm256_unpacklo_pd(_mm256_castps_pd(a), _mm256_castps_pd(b))))
+#define unpackhi_pd(a, b) (_mm256_castpd_ps(_mm256_unpackhi_pd(_mm256_castps_pd(a), _mm256_castps_pd(b))))
 #else
 #define MM __m128
 #define VSIZE 2 // Complex numbers per vector
@@ -66,16 +66,19 @@
 #define storeu_ps(addr, x) _mm_storeu_ps((float*)(addr), x)
 #define splat_const_complex(real, imag) _mm_set_ps(imag, real, imag, real)
 #define splat_const_dual_complex(a, b, real, imag) _mm_set_ps(imag, real, b, a)
-#define unpacklo_pd(a, b) ((__m128)_mm_unpacklo_pd((__m128d)(a), (__m128d)(b)))
-#define unpackhi_pd(a, b) ((__m128)_mm_unpackhi_pd((__m128d)(a), (__m128d)(b)))
 
 #if __SSE3__
 #define addsub_ps(a, b) _mm_addsub_ps(a, b)
 #define moveldup_ps(x) _mm_moveldup_ps(x)
 #define movehdup_ps(x) _mm_movehdup_ps(x)
+#define unpacklo_pd(a, b) (_mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(a), _mm_castps_pd(b))))
+#define unpackhi_pd(a, b) (_mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(a), _mm_castps_pd(b))))
 #else
 #define moveldup_ps(x) permute_ps(x, _MM_SHUFFLE(2, 2, 0, 0))
 #define movehdup_ps(x) permute_ps(x, _MM_SHUFFLE(3, 3, 1, 1))
+#define unpacklo_pd(a, b) (_mm_shuffle_ps(a, b, _MM_SHUFFLE(1, 0, 1, 0)))
+#define unpackhi_pd(a, b) (_mm_shuffle_ps(a, b, _MM_SHUFFLE(3, 2, 3, 2)))
+
 static inline __m128 addsub_ps(__m128 a, __m128 b)
 {
     const MM flip_signs = splat_const_complex(-0.0f, 0.0f);
@@ -85,8 +88,13 @@ static inline __m128 addsub_ps(__m128 a, __m128 b)
 
 static inline __m128 splat_complex(const void *ptr)
 {
+#if __SSE3__
     __m128d reg = _mm_load_sd((const double*)ptr);
-    return (__m128)_mm_unpacklo_pd(reg, reg);
+	return _mm_castpd_ps(_mm_unpacklo_pd(reg, reg));
+#else
+	__m128 reg = _mm_loadl_pi(_mm_setzero_ps(), (const __m64 *)ptr);
+	return _mm_shuffle_ps(reg, reg, _MM_SHUFFLE(1, 0, 1, 0));
+#endif
 }
 #endif
 
@@ -477,8 +485,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1)(void * MUFFT_RESTRICT output_, co
     (void)p; \
  \
     const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
-    const MM w_f = splat_const_complex(+M_SQRT1_2, twiddle8); \
-    const MM w_h = splat_const_complex(-M_SQRT1_2, twiddle8); \
+    const MM w_f = splat_const_complex((float)(+M_SQRT1_2), twiddle8); \
+    const MM w_h = splat_const_complex((float)(-M_SQRT1_2), twiddle8); \
  \
     unsigned octa_samples = samples >> 3; \
     for (unsigned i = 0; i < octa_samples; i += VSIZE) \
@@ -550,8 +558,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1)(void * MUFFT_RESTRICT output_, co
         MM r5 = sub_ps(c, g); \
         MM r6 = add_ps(d, h); \
         MM r7 = sub_ps(d, h)
-RADIX8_P1(forward, 0.0f, -0.0f, -M_SQRT1_2)
-RADIX8_P1(inverse, -0.0f, +0.0f, +M_SQRT1_2)
+RADIX8_P1(forward, 0.0f, -0.0f, (float)(-M_SQRT1_2))
+RADIX8_P1(inverse, -0.0f, +0.0f, (float)(+M_SQRT1_2))
 #undef RADIX8_LOAD_FIRST_BUTTERFLY
 #define RADIX8_LOAD_FIRST_BUTTERFLY \
         MM a = load_ps(&input[i]); \
@@ -568,7 +576,7 @@ RADIX8_P1(inverse, -0.0f, +0.0f, +M_SQRT1_2)
         MM r5 = c; \
         MM r6 = d; \
         MM r7 = d
-RADIX8_P1(forward_half, 0.0f, -0.0f, -M_SQRT1_2)
+RADIX8_P1(forward_half, 0.0f, -0.0f, (float)(-M_SQRT1_2))
 
 void MANGLE(mufft_radix8_generic)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
         const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples)
@@ -813,8 +821,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void * MUFFT_RESTRICT output
     unsigned octa_lines = samples_y >> 3; \
     unsigned octa_stride = stride * octa_lines; \
     const MM flip_signs = splat_const_complex(twiddle_r, twiddle_i); \
-    const MM w_f = splat_const_complex(+M_SQRT1_2, twiddle8); \
-    const MM w_h = splat_const_complex(-M_SQRT1_2, twiddle8); \
+    const MM w_f = splat_const_complex((float)(+M_SQRT1_2), twiddle8); \
+    const MM w_h = splat_const_complex((float)(-M_SQRT1_2), twiddle8); \
  \
     for (unsigned line = 0; line < octa_lines; \
             line++, input += stride, output += stride << 3) \
@@ -873,8 +881,8 @@ void MANGLE(mufft_ ## direction ## _radix8_p1_vert)(void * MUFFT_RESTRICT output
         } \
     } \
 }
-RADIX8_P1_VERT(forward, 0.0f, -0.0f, -M_SQRT1_2)
-RADIX8_P1_VERT(inverse, -0.0f, 0.0f, +M_SQRT1_2)
+RADIX8_P1_VERT(forward, 0.0f, -0.0f, (float)(-M_SQRT1_2))
+RADIX8_P1_VERT(inverse, -0.0f, 0.0f, (float)(+M_SQRT1_2))
 
 void MANGLE(mufft_radix8_generic_vert)(void * MUFFT_RESTRICT output_, const void * MUFFT_RESTRICT input_,
         const cfloat * MUFFT_RESTRICT twiddles, unsigned p, unsigned samples_x, unsigned stride, unsigned samples_y)

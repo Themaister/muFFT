@@ -500,6 +500,7 @@ int main(void)
             printf("Testing 1D inverse transform size %u, flags = %u.\n", N, flags);
             test_fft_1d(N, +1, flags);
             printf("    ... Passed\n");
+            fflush(stdout);
         }
     }
 
@@ -518,6 +519,7 @@ int main(void)
             printf("Testing 1D complex-to-real transform size %u, flags = %u.\n", N, flags);
             test_fft_1d_c2r(N, flags);
             printf("    ... Passed\n");
+            fflush(stdout);
         }
     }
 
@@ -532,6 +534,7 @@ int main(void)
             printf("Testing 1D convolution transform size %u, flags = %u.\n", N, flags);
             test_conv_stereo(N, flags);
             printf("    ... Passed\n");
+            fflush(stdout);
         }
     }
 
@@ -548,6 +551,7 @@ int main(void)
                 printf("Testing 2D inverse transform size %u-by-%u, flags = %u.\n", Nx, Ny, flags);
                 test_fft_2d(Nx, Ny, +1, flags);
                 printf("    ... Passed\n");
+                fflush(stdout);
             }
         }
     }
@@ -565,6 +569,7 @@ int main(void)
                 printf("Testing 2D complex-to-real transform size %u-by-%u, flags = %u.\n", Nx, Ny, flags);
                 test_fft_2d_c2r(Nx, Ny, flags);
                 printf("    ... Passed\n");
+                fflush(stdout);
             }
         }
     }
