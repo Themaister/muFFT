@@ -28,26 +28,16 @@ It focuses particularly on linear convolution for audio applications and being o
 
 ## Building
 
-muFFT is built with straight GNU make.
-Run `make help` to see options.
-
-
-### Linking against muFFT
-
-muFFT installs a pkg-config file to `$(PREFIX)/lib/pkg-config`.
-To get appropriate CFLAGS and LDFLAGS:
-
-    pkg-config mufft --libs
-    pkg-config mufft --cflags
-
-## Complex number representation
+muFFT is built with straight CMake. Use `add_subdirectory` in your project.
 
 muFFT uses the C99 and C++ ABI for complex numbers, interleaved real and imaginary samples, i.e.:
 
-    struct complex_float {
-        float real;
-        float imag;
-    };
+```
+struct complex_float {
+	float real;
+	float imag;
+};
+```
 
 C99 `complex float` from `<complex.h>` and C++ `std::complex<float>` from `<complex>` can safely be used with muFFT.
 
@@ -67,7 +57,7 @@ as is supported in more sophisticated FFT libraries. Reasonable decompositions a
 
 The muFFT library is licensed under the permissive MIT license, see COPYING and preambles in source files for more detail.
 
-Note that the `mufft_bench` and `mufft_test` binaries link against FFTW3 for verification purposes, a GPLv2+ library.
+Note that the `muFFT-bench` and `muFFT-test` binaries link against FFTW3 for verification purposes, a GPLv2+ library.
 If you choose to distribute either of these binaries, muFFT source must be provided as well.
 See COPYING.GPLv2 for details.
 These binaries are non-essential, and are only intended for use during development and verification,
@@ -76,7 +66,7 @@ and not for distribution.
 ## Documentation
 
 The public muFFT API is documented with doxygen.
-Run `doxygen` or `make docs` to generate documentation. Doxygen 1.8.3 is required.
+Run `doxygen` to generate documentation. Doxygen 1.8.3 is required.
 
 After running Doxygen, documents are found in `docs/index.html`.
 
@@ -90,14 +80,9 @@ The various test and benchmark routines flex most of the API. It it also a good 
 All muFFT APIs have unit tests. muFFT output is verified against the FFTW library.
 The convolution API is verified against a straight O(N^2) convolution.
 
-To build the test suite, run
-
-    make test
-    ./mufft_test
-
-The FFTW3 library must be present on your system via `pkg-config fftw3f --libs` when building this.
+The FFTW3 library must be present on your system via pkg-config when building this.
 Note that FFTW3 (as of writing) is licensed under GPLv2+.
-The `mufft_test` binary falls under licensing requirements of GPLv2 as per FFTW license.
+The `muFFT-test` binary falls under licensing requirements of GPLv2 as per FFTW license.
 
 ## <a name="benchmark"></a>  Benchmark
 
@@ -107,12 +92,13 @@ Gflops values reported are based on the estimated number of flops consumed by a 
 Values reported should be taken with a grain of salt, but it gives a reasonable estimate for throughput.
 Average time consumed by a single FFT is reported as well.
 
-To build the benchmark, run
+To run the benchmark:
 
-    make bench
-    ./mufft_bench 1000000 64  # 1 million iterations of various N = 64 FFTs variants
-    ./mufft_bench 10000 64 64 # 10k iterations of 64-by-64 2D FFT
-    ./mufft_bench # Run various 1D and 2D benchmarks
+```
+    ./muFFT-bench 1000000 64  # 1 million iterations of various N = 64 FFTs variants
+    ./muFFT-bench 10000 64 64 # 10k iterations of 64-by-64 2D FFT
+    ./muFFT-bench # Run various 1D and 2D benchmarks
+```
 
 The benchmark for 1D tests various things:
 
@@ -120,7 +106,7 @@ The benchmark for 1D tests various things:
  - Real-to-complex and Complex-to-real in one iteration (typical convolution scenario)
  - Mono convolution, stereo convolution
 
-The FFTW3 library must be present on your system via `pkg-config fftw3f --libs` when building this.
+The FFTW3 library must be present on your system via pkg-config when building this.
 Note that FFTW3 (as of writing) is licensed under GPLv2+.
-The `mufft_bench` binary falls under licensing requirements of GPLv2 as per FFTW3 license.
+The `muFFT-bench` binary falls under licensing requirements of GPLv2 as per FFTW3 license.
 
