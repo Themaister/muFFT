@@ -25,5 +25,5 @@
 #ifndef __AVX__
 #define __AVX__ 1
 #endif
-#include "kernel.inc"
+#include "kernel.h"
 

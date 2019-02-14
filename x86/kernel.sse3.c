@@ -23,5 +23,5 @@
 #define __SSE3__ 1
 #endif
 #undef __AVX__
-#include "kernel.inc"
+#include "kernel.h"
 

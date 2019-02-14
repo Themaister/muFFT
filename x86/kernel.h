@@ -16,6 +16,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#ifndef KERNEL_H_X86
+#define KERNEL_H_X86
 #include "../fft_internal.h"
 
 #undef MANGLE
@@ -961,4 +963,4 @@ void MANGLE(mufft_radix8_generic_vert)(void * MUFFT_RESTRICT output_, const void
         }
     }
 }
-
+#endif
