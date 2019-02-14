@@ -22,7 +22,6 @@
 
 #include "fft.h"
 #include "fft_internal.h"
-#include <complex.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,23 +30,24 @@
 
 static void test_fft_2d(unsigned Nx, unsigned Ny, int direction, unsigned flags)
 {
-    complex float *input = mufft_alloc(Nx * Ny * sizeof(complex float));
-    complex float *output = mufft_alloc(Nx * Ny * sizeof(complex float));
-    complex float *input_fftw = fftwf_malloc(Nx * Ny * sizeof(fftwf_complex));
-    complex float *output_fftw = fftwf_malloc(Nx * Ny * sizeof(fftwf_complex));
+    cfloat *input = mufft_alloc(Nx * Ny * sizeof(cfloat));
+    cfloat *output = mufft_alloc(Nx * Ny * sizeof(cfloat));
+    cfloat *input_fftw = fftwf_malloc(Nx * Ny * sizeof(fftwf_complex));
+    cfloat *output_fftw = fftwf_malloc(Nx * Ny * sizeof(fftwf_complex));
 
     srand(0);
     for (unsigned i = 0; i < Nx * Ny; i++)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + I * imag;
+        input[i] = cfloat_create(real, imag);
     }
 
-    fftwf_plan plan = fftwf_plan_dft_2d(Ny, Nx, input_fftw, output_fftw,
-            direction, FFTW_ESTIMATE);
+    fftwf_plan plan = fftwf_plan_dft_2d(Ny, Nx,
+                                        (fftwf_complex *)input_fftw, (fftwf_complex *)output_fftw,
+                                        direction, FFTW_ESTIMATE);
     mufft_assert(plan != NULL);
-    memcpy(input_fftw, input, Nx * Ny * sizeof(complex float));
+    memcpy(input_fftw, input, Nx * Ny * sizeof(cfloat));
 
     mufft_plan_2d *muplan = mufft_create_plan_2d_c2c(Nx, Ny, direction, flags);
     mufft_assert(muplan != NULL);
@@ -58,7 +58,7 @@ static void test_fft_2d(unsigned Nx, unsigned Ny, int direction, unsigned flags)
     const float epsilon = 0.000001f * sqrtf(Nx * Ny);
     for (unsigned i = 0; i < Nx * Ny; i++)
     {
-        float delta = cabsf(output[i] - output_fftw[i]);
+        float delta = cfloat_abs(cfloat_sub(output[i], output_fftw[i]));
         mufft_assert(delta < epsilon);
     }
 
@@ -74,9 +74,9 @@ static void test_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags)
 {
     unsigned fftN = Nx / 2 + 1;
     float *input = mufft_alloc(Nx * Ny * sizeof(float));
-    complex float *output = mufft_alloc(Nx * Ny * sizeof(complex float));
+    cfloat *output = mufft_alloc(Nx * Ny * sizeof(cfloat));
     float *input_fftw = fftwf_malloc(Nx * Ny * sizeof(float));
-    complex float *output_fftw = fftwf_malloc(fftN * Ny * sizeof(fftwf_complex));
+    cfloat *output_fftw = fftwf_malloc(fftN * Ny * sizeof(fftwf_complex));
 
     srand(0);
     for (unsigned i = 0; i < Nx * Ny; i++)
@@ -85,7 +85,7 @@ static void test_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags)
         input[i] = real;
     }
 
-    fftwf_plan plan = fftwf_plan_dft_r2c_2d(Ny, Nx, input_fftw, output_fftw,
+    fftwf_plan plan = fftwf_plan_dft_r2c_2d(Ny, Nx, input_fftw, (fftwf_complex *)output_fftw,
             FFTW_ESTIMATE);
     mufft_assert(plan != NULL);
     memcpy(input_fftw, input, Nx * Ny * sizeof(float));
@@ -101,7 +101,7 @@ static void test_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags)
     {
         for (unsigned x = 0; x < fftN; x++)
         {
-            float delta = cabsf(output[y * Nx + x] - output_fftw[y * fftN + x]);
+            float delta = cfloat_abs(cfloat_sub(output[y * Nx + x], output_fftw[y * fftN + x]));
             mufft_assert(delta < epsilon);
         }
     }
@@ -117,9 +117,9 @@ static void test_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned flags)
 static void test_fft_2d_c2r(unsigned Nx, unsigned Ny, unsigned flags)
 {
     unsigned fftN = Nx / 2 + 1;
-    complex float *input = mufft_calloc(Nx * Ny * sizeof(complex float));
+    cfloat *input = mufft_calloc(Nx * Ny * sizeof(cfloat));
     float *output = mufft_calloc(2 * Nx * Ny * sizeof(float));
-    complex float *input_fftw = fftwf_malloc(Nx * Ny * sizeof(complex float));
+    cfloat *input_fftw = fftwf_malloc(Nx * Ny * sizeof(cfloat));
     float *output_fftw = fftwf_malloc(2 * Nx * Ny * sizeof(float));
 
     srand(0);
@@ -129,20 +129,20 @@ static void test_fft_2d_c2r(unsigned Nx, unsigned Ny, unsigned flags)
         {
             float real = (float)rand() / RAND_MAX - 0.5f;
             float imag = (float)rand() / RAND_MAX - 0.5f;
-            input[y * Nx + x] = real + _Complex_I * imag;
+            input[y * Nx + x] = cfloat_create(real, imag);
         }
     }
-    input[0] = (float)rand() / RAND_MAX - 0.5f;
-    input[Ny / 2 * Nx] = (float)rand() / RAND_MAX - 0.5f;
-    input[Nx / 2] = (float)rand() / RAND_MAX - 0.5f;
-    input[Ny / 2 * Nx + Nx / 2] = (float)rand() / RAND_MAX - 0.5f;
+    input[0].real = (float)rand() / RAND_MAX - 0.5f;
+    input[Ny / 2 * Nx].real = (float)rand() / RAND_MAX - 0.5f;
+    input[Nx / 2].real = (float)rand() / RAND_MAX - 0.5f;
+    input[Ny / 2 * Nx + Nx / 2].real = (float)rand() / RAND_MAX - 0.5f;
 
-    fftwf_plan plan = fftwf_plan_dft_c2r_2d(Ny, Nx, input_fftw, output_fftw,
-            FFTW_ESTIMATE);
+    fftwf_plan plan = fftwf_plan_dft_c2r_2d(Ny, Nx, (fftwf_complex *)input_fftw, output_fftw,
+                                            FFTW_ESTIMATE);
     mufft_assert(plan != NULL);
     for (unsigned y = 0; y < Ny; y++)
     {
-        memcpy(input_fftw + fftN * y, input + Nx * y, fftN * sizeof(complex float));
+        memcpy(input_fftw + fftN * y, input + Nx * y, fftN * sizeof(cfloat));
     }
 
     mufft_plan_2d *muplan = mufft_create_plan_2d_c2r(Nx, Ny, flags);
@@ -168,23 +168,23 @@ static void test_fft_2d_c2r(unsigned Nx, unsigned Ny, unsigned flags)
 
 static void test_fft_1d(unsigned N, int direction, unsigned flags)
 {
-    complex float *input = mufft_alloc(N * sizeof(complex float));
-    complex float *output = mufft_alloc(N * sizeof(complex float));
-    complex float *input_fftw = fftwf_malloc(N * sizeof(fftwf_complex));
-    complex float *output_fftw = fftwf_malloc(N * sizeof(fftwf_complex));
+    cfloat *input = mufft_alloc(N * sizeof(cfloat));
+    cfloat *output = mufft_alloc(N * sizeof(cfloat));
+    cfloat *input_fftw = fftwf_malloc(N * sizeof(fftwf_complex));
+    cfloat *output_fftw = fftwf_malloc(N * sizeof(fftwf_complex));
 
     srand(0);
     for (unsigned i = 0; i < N; i++)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = cfloat_create(real, imag);
     }
 
-    fftwf_plan plan = fftwf_plan_dft_1d(N, input_fftw, output_fftw,
-            direction, FFTW_ESTIMATE);
+    fftwf_plan plan = fftwf_plan_dft_1d(N, (fftwf_complex *)input_fftw, (fftwf_complex *)output_fftw,
+                                        direction, FFTW_ESTIMATE);
     mufft_assert(plan != NULL);
-    memcpy(input_fftw, input, N * sizeof(complex float));
+    memcpy(input_fftw, input, N * sizeof(cfloat));
 
     mufft_plan_1d *muplan = mufft_create_plan_1d_c2c(N, direction, flags);
     mufft_assert(muplan != NULL);
@@ -195,7 +195,7 @@ static void test_fft_1d(unsigned N, int direction, unsigned flags)
     const float epsilon = 0.000001f * sqrtf(N);
     for (unsigned i = 0; i < N; i++)
     {
-        float delta = cabsf(output[i] - output_fftw[i]);
+        float delta = cfloat_abs(cfloat_sub(output[i], output_fftw[i]));
         mufft_assert(delta < epsilon);
     }
 
@@ -210,24 +210,24 @@ static void test_fft_1d(unsigned N, int direction, unsigned flags)
 static void test_fft_1d_c2r(unsigned N, unsigned flags)
 {
     unsigned fftN = N / 2 + 1;
-    complex float *input = mufft_alloc(fftN * sizeof(complex float));
-    float *output = mufft_alloc(N * sizeof(float));
-    complex float *input_fftw = fftwf_malloc(fftN * sizeof(fftwf_complex));
+    cfloat *input = mufft_calloc(fftN * sizeof(cfloat));
+    float *output = mufft_calloc(N * sizeof(float));
+    cfloat *input_fftw = fftwf_malloc(fftN * sizeof(fftwf_complex));
     float *output_fftw = fftwf_malloc(N * sizeof(float));
 
     srand(0);
-    input[0] = (float)rand() / RAND_MAX - 0.5f;
+    input[0].real = (float)rand() / RAND_MAX - 0.5f;
     for (unsigned i = 1; i < N / 2; i++)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = cfloat_create(real, imag);
     }
-    input[N / 2] = (float)rand() / RAND_MAX - 0.5f;
+    input[N / 2].real = (float)rand() / RAND_MAX - 0.5f;
 
-    fftwf_plan plan = fftwf_plan_dft_c2r_1d(N, input_fftw, output_fftw, FFTW_ESTIMATE);
+    fftwf_plan plan = fftwf_plan_dft_c2r_1d(N, (fftwf_complex *)input_fftw, output_fftw, FFTW_ESTIMATE);
     mufft_assert(plan != NULL);
-    memcpy(input_fftw, input, fftN * sizeof(complex float));
+    memcpy(input_fftw, input, fftN * sizeof(cfloat));
 
     mufft_plan_1d *muplan = mufft_create_plan_1d_c2r(N, flags);
     mufft_assert(muplan != NULL);
@@ -254,9 +254,9 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
 {
     unsigned fftN = N / 2 + 1;
     float *input = mufft_alloc(N * sizeof(float));
-    complex float *output = mufft_alloc(N * sizeof(complex float));
+    cfloat *output = mufft_alloc(N * sizeof(cfloat));
     float *input_fftw = fftwf_malloc(N * sizeof(float));
-    complex float *output_fftw = fftwf_malloc(fftN * sizeof(fftwf_complex));
+    cfloat *output_fftw = fftwf_malloc(fftN * sizeof(fftwf_complex));
 
     srand(0);
     for (unsigned i = 0; i < N; i++)
@@ -265,7 +265,7 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
         input[i] = real;
     }
 
-    fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, input_fftw, output_fftw, FFTW_ESTIMATE);
+    fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, input_fftw, (fftwf_complex *)output_fftw, FFTW_ESTIMATE);
     mufft_assert(plan != NULL);
     memcpy(input_fftw, input, N * sizeof(float));
 
@@ -280,7 +280,7 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
     const float epsilon = 0.000001f * sqrtf(N);
     for (unsigned i = 0; i < fftN; i++)
     {
-        float delta = cabsf(output[i] - output_fftw[i]);
+        float delta = cfloat_abs(cfloat_sub(output[i], output_fftw[i]));
         mufft_assert(delta < epsilon);
     }
 
@@ -288,16 +288,16 @@ static void test_fft_1d_r2c(unsigned N, unsigned flags)
 
     for (unsigned i = 0; i < fftN; i++)
     {
-        float delta = cabsf(output[i] - output_fftw[i]);
+        float delta = cfloat_abs(cfloat_sub(output[i], output_fftw[i]));
         mufft_assert(delta < epsilon);
     }
 
     // Verify stuff is properly conjugated as well.
     for (unsigned i = 1; i < N / 2; i++)
     {
-        complex float a = output[i];
-        complex float b = conjf(output[N - i]);
-        float delta = cabsf(a - b);
+        cfloat a = output[i];
+        cfloat b = cfloat_conj(output[N - i]);
+        float delta = cfloat_abs(cfloat_sub(a, b));
         mufft_assert(delta < epsilon);
     }
 
@@ -314,9 +314,9 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
 {
     unsigned fftN = N / 2 + 1;
     float *input = mufft_alloc((N / 2) * sizeof(float));
-    complex float *output = mufft_alloc(N * sizeof(complex float));
+    cfloat *output = mufft_alloc(N * sizeof(cfloat));
     float *input_fftw = fftwf_malloc(N * sizeof(float));
-    complex float *output_fftw = fftwf_malloc(fftN * sizeof(fftwf_complex));
+    cfloat *output_fftw = fftwf_malloc(fftN * sizeof(fftwf_complex));
 
     memset(input_fftw, 0, N * sizeof(float));
 
@@ -327,7 +327,7 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
         input[i] = real;
     }
 
-    fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, input_fftw, output_fftw, FFTW_ESTIMATE);
+    fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, input_fftw, (fftwf_complex *)output_fftw, FFTW_ESTIMATE);
     mufft_assert(plan != NULL);
     memcpy(input_fftw, input, (N / 2) * sizeof(float));
 
@@ -342,7 +342,7 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
     const float epsilon = 0.000001f * sqrtf(N);
     for (unsigned i = 0; i < fftN; i++)
     {
-        float delta = cabsf(output[i] - output_fftw[i]);
+        float delta = cfloat_abs(cfloat_sub(output[i], output_fftw[i]));
         mufft_assert(delta < epsilon);
     }
 
@@ -350,16 +350,16 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
 
     for (unsigned i = 0; i < fftN; i++)
     {
-        float delta = cabsf(output[i] - output_fftw[i]);
+        float delta = cfloat_abs(cfloat_sub(output[i], output_fftw[i]));
         mufft_assert(delta < epsilon);
     }
 
     // Verify stuff is properly conjugated as well.
     for (unsigned i = 1; i < N / 2; i++)
     {
-        complex float a = output[i];
-        complex float b = conjf(output[N - i]);
-        float delta = cabsf(a - b);
+        cfloat a = output[i];
+        cfloat b = cfloat_conj(output[N - i]);
+        float delta = cfloat_abs(cfloat_sub(a, b));
         mufft_assert(delta < epsilon);
     }
 
@@ -372,29 +372,35 @@ static void test_fft_1d_r2c_half(unsigned N, unsigned flags)
     fftwf_destroy_plan(plan);
 }
 
-#define convolve(T, name) \
-static void convolve_ ## name(T *output, const T *a, const float *b, unsigned N) \
-{ \
-    for (unsigned i = 0; i < 2 * N; i++) \
-    { \
-        T sum = 0.0f; \
- \
-        unsigned start_x = 0; \
-        start_x = (i >= N) ? (i - (N - 1)) : 0; \
- \
-        unsigned end_x = i; \
-        end_x = (end_x >= N) ? N - 1 : end_x; \
- \
-        for (unsigned x = start_x; x <= end_x; x++) \
-        { \
-            sum += a[i - x] * b[x]; \
-        } \
- \
-        output[i] = sum; \
-    } \
+static void convolve_float(float *output, const float *a, const float *b, unsigned N)
+{
+    for (unsigned i = 0; i < 2 * N; i++)
+    {
+        float sum = 0.0f;
+        unsigned start_x = 0;
+        start_x = (i >= N) ? (i - (N - 1)) : 0;
+        unsigned end_x = i;
+        end_x = (end_x >= N) ? N - 1 : end_x;
+        for (unsigned x = start_x; x <= end_x; x++)
+            sum += a[i - x] * b[x];
+        output[i] = sum;
+    }
 }
-convolve(float, float)
-convolve(complex float, complex)
+
+static void convolve_complex(cfloat *output, const cfloat *a, const float *b, unsigned N)
+{
+    for (unsigned i = 0; i < 2 * N; i++)
+    {
+        cfloat sum = cfloat_create(0.0f, 0.0f);
+        unsigned start_x = 0;
+        start_x = (i >= N) ? (i - (N - 1)) : 0;
+        unsigned end_x = i;
+        end_x = (end_x >= N) ? N - 1 : end_x;
+        for (unsigned x = start_x; x <= end_x; x++)
+            sum = cfloat_add(sum, cfloat_mul(a[i - x], cfloat_create(b[x], 0.0f)));
+        output[i] = sum;
+    }
+}
 
 static void test_conv(unsigned N, unsigned flags)
 {
@@ -440,7 +446,7 @@ static void test_conv(unsigned N, unsigned flags)
 
 static void test_conv_stereo(unsigned N, unsigned flags)
 {
-    complex float *a = mufft_calloc((N / 2) * sizeof(complex float));
+    cfloat *a = mufft_calloc((N / 2) * sizeof(cfloat));
     float *b = mufft_calloc((N / 2) * sizeof(float));
 
     srand(0);
@@ -448,12 +454,12 @@ static void test_conv_stereo(unsigned N, unsigned flags)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        a[i] = real + I * imag;
+        a[i] = cfloat_create(real, imag);
         b[i] = (float)rand() / RAND_MAX - 0.5f;
     }
 
-    complex float *output = mufft_alloc(N * sizeof(complex float));
-    complex float *ref_output = mufft_alloc(N * sizeof(complex float));
+    cfloat *output = mufft_alloc(N * sizeof(cfloat));
+    cfloat *ref_output = mufft_alloc(N * sizeof(cfloat));
     mufft_plan_conv *plan = mufft_create_plan_conv(N, flags, MUFFT_CONV_METHOD_FLAG_STEREO_MONO | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_FIRST | MUFFT_CONV_METHOD_FLAG_ZERO_PAD_UPPER_HALF_SECOND);
     mufft_assert(plan != NULL);
 
@@ -468,7 +474,7 @@ static void test_conv_stereo(unsigned N, unsigned flags)
     const float epsilon = 0.000002f * sqrtf(N);
     for (unsigned i = 0; i < N; i++)
     {
-        float delta = cabsf(ref_output[i] - output[i]);
+        float delta = cfloat_abs(cfloat_sub(ref_output[i], output[i]));
         mufft_assert(delta < epsilon);
     }
 

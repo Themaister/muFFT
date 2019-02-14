@@ -102,7 +102,7 @@ struct mufft_plan_conv
 static cfloat twiddle(int direction, int k, int p)
 {
     double phase = (M_PI * direction * k) / p;
-    return cos(phase) + I * sin(phase);
+    return cfloat_create((float)cos(phase), (float)sin(phase));
 }
 
 /// \brief Builds a table of twiddle factors.
@@ -448,7 +448,7 @@ static cfloat *build_r2c_twiddles(int direction, unsigned N)
 
     for (unsigned i = 0; i < N; i++)
     {
-        twiddles[i] = I * direction * twiddle(direction, i, N);
+        twiddles[i] = cfloat_mul(cfloat_create(0.0f, direction), twiddle(direction, i, N));
     }
 
     return twiddles;

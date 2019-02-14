@@ -23,7 +23,6 @@
 
 #include "fft.h"
 #include <math.h>
-#include <complex.h>
 
 #ifndef M_PI
 /// Portable definition of M_PI
@@ -44,12 +43,65 @@
 /// Helper macro to get number of elements in an array.
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-#undef I
-/// Portable definition of the imaginary constant sqrt(-1).
-#define I _Complex_I
-
 /// Internal short definition of C99 complex float
-typedef complex float cfloat;
+typedef struct cfloat
+{
+    float real;
+    float imag;
+} cfloat;
+
+static inline cfloat cfloat_create(float real, float imag)
+{
+    cfloat ret = { real, imag };
+    return ret;
+}
+
+static inline float cfloat_abs(cfloat v)
+{
+    return sqrtf(v.real * v.real + v.imag * v.imag);
+}
+
+static inline cfloat cfloat_real(cfloat v)
+{
+    cfloat ret = { v.real, 0.0f };
+    return ret;
+}
+
+static inline cfloat cfloat_imag(cfloat v)
+{
+    cfloat ret = { v.imag, 0.0f };
+    return ret;
+}
+
+static inline cfloat cfloat_conj(cfloat v)
+{
+    cfloat ret = { v.real, -v.imag };
+    return ret;
+}
+
+static inline cfloat cfloat_add(cfloat a, cfloat b)
+{
+    cfloat ret = { a.real + b.real, a.imag + b.imag };
+    return ret;
+}
+
+static inline cfloat cfloat_sub(cfloat a, cfloat b)
+{
+    cfloat ret = { a.real - b.real, a.imag - b.imag };
+    return ret;
+}
+
+static inline cfloat cfloat_mul(cfloat a, cfloat b)
+{
+    cfloat ret = { a.real * b.real - a.imag * b.imag, a.real * b.imag + b.real * a.imag };
+    return ret;
+}
+
+static inline cfloat cfloat_mul_scalar(float s, cfloat a)
+{
+    cfloat ret = { a.real * s, a.imag * s };
+    return ret;
+}
 
 /// 1D/horizontal FFT routine signature
 typedef void (*mufft_1d_func)(void * MUFFT_RESTRICT output, const void * MUFFT_RESTRICT input,

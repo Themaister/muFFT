@@ -134,18 +134,18 @@ void MANGLE(mufft_resolve_c2r)(cfloat * MUFFT_RESTRICT output, const cfloat * MU
 void MANGLE(mufft_resolve_r2c_full)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
         const cfloat * MUFFT_RESTRICT twiddles, unsigned samples)
 {
-    cfloat fe = crealf(input[0]);
-    cfloat fo = cimagf(input[0]);
-    output[0] = fe + fo;
-    output[samples] = fe - fo;
+    cfloat fe = cfloat_real(input[0]);
+    cfloat fo = cfloat_imag(input[0]);
+    output[0] = cfloat_add(fe, fo);
+    output[samples] = cfloat_sub(fe, fo);
     for (unsigned i = 1; i < VSIZE; i++)
     {
         cfloat a = input[i];
-        cfloat b = conjf(input[samples - i]);
-        cfloat fe = a + b;
-        cfloat fo = twiddles[i] * (a - b);
-        output[i] = 0.5f * (fe + fo);
-        output[i + samples] = 0.5f * (fe - fo);
+        cfloat b = cfloat_conj(input[samples - i]);
+        cfloat fe = cfloat_add(a, b);
+        cfloat fo = cfloat_mul(twiddles[i], cfloat_sub(a, b));
+        output[i] = cfloat_mul_scalar(0.5f, cfloat_add(fe, fo));
+        output[i + samples] = cfloat_mul_scalar(0.5f, cfloat_sub(fe, fo));
     }
 
     const MM flip_signs = splat_const_complex(0.0f, -0.0f);
@@ -168,17 +168,17 @@ void MANGLE(mufft_resolve_r2c_full)(cfloat * MUFFT_RESTRICT output, const cfloat
 void MANGLE(mufft_resolve_r2c)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
         const cfloat * MUFFT_RESTRICT twiddles, unsigned samples)
 {
-    cfloat fe = crealf(input[0]);
-    cfloat fo = cimagf(input[0]);
-    output[0] = fe + fo;
-    output[samples] = fe - fo;
+    cfloat fe = cfloat_real(input[0]);
+    cfloat fo = cfloat_imag(input[0]);
+    output[0] = cfloat_add(fe, fo);
+    output[samples] = cfloat_sub(fe, fo);
     for (unsigned i = 1; i < VSIZE; i++)
     {
         cfloat a = input[i];
-        cfloat b = conjf(input[samples - i]);
-        cfloat fe = a + b;
-        cfloat fo = twiddles[i] * (a - b);
-        output[i] = 0.5f * (fe + fo);
+        cfloat b = cfloat_conj(input[samples - i]);
+        cfloat fe = cfloat_add(a, b);
+        cfloat fo = cfloat_mul(twiddles[i], cfloat_sub(a, b));
+        output[i] = cfloat_mul_scalar(0.5f, cfloat_add(fe, fo));
     }
 
     const MM flip_signs = splat_const_complex(0.0f, -0.0f);

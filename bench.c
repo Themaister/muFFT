@@ -17,7 +17,7 @@
  */
 
 #include "fft.h"
-#include <complex.h>
+#include "fft_internal.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,18 +36,18 @@ static double mufft_get_time(void)
 
 static double bench_fftw_1d(unsigned N, unsigned iterations, unsigned flags)
 {
-    complex float *input = fftwf_malloc(N * sizeof(complex float));
-    complex float *output = fftwf_malloc(N * sizeof(complex float));
+    cfloat *input = fftwf_malloc(N * sizeof(cfloat));
+    cfloat *output = fftwf_malloc(N * sizeof(cfloat));
 
-    fftwf_plan plan = fftwf_plan_dft_1d(N, input, output,
-            FFTW_FORWARD, flags);
+    fftwf_plan plan = fftwf_plan_dft_1d(N, (fftwf_complex *)input, (fftwf_complex *)output,
+                                        FFTW_FORWARD, flags);
 
     srand(0);
     for (unsigned i = 0; i < N; i++)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = cfloat_create(real, imag);
     }
 
     double start_time = mufft_get_time();
@@ -69,11 +69,11 @@ static double bench_fftw_1d_real(unsigned N, unsigned iterations, unsigned flags
     unsigned fftN = N / 2 + 1;
     float *input = fftwf_malloc(N * sizeof(float));
     float *dummy = fftwf_malloc(N * sizeof(float));
-    complex float *output = fftwf_malloc(fftN * sizeof(complex float));
+    cfloat *output = fftwf_malloc(fftN * sizeof(cfloat));
 
-    fftwf_plan plan_r2c = fftwf_plan_dft_r2c_1d(N, input, output,
+    fftwf_plan plan_r2c = fftwf_plan_dft_r2c_1d(N, input, (fftwf_complex *)output,
             flags);
-    fftwf_plan plan_c2r = fftwf_plan_dft_c2r_1d(N, output, dummy,
+    fftwf_plan plan_c2r = fftwf_plan_dft_c2r_1d(N, (fftwf_complex *)output, dummy,
             flags);
 
     srand(0);
@@ -102,10 +102,10 @@ static double bench_fftw_1d_real(unsigned N, unsigned iterations, unsigned flags
 
 static double bench_fftw_2d(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
 {
-    complex float *input = fftwf_malloc(Nx * Ny * sizeof(complex float));
-    complex float *output = fftwf_malloc(Nx * Ny * sizeof(complex float));
+    cfloat *input = fftwf_malloc(Nx * Ny * sizeof(cfloat));
+    cfloat *output = fftwf_malloc(Nx * Ny * sizeof(cfloat));
 
-    fftwf_plan plan = fftwf_plan_dft_2d(Ny, Nx, input, output,
+    fftwf_plan plan = fftwf_plan_dft_2d(Ny, Nx, (fftwf_complex *)input, (fftwf_complex *)output,
             FFTW_FORWARD, flags);
 
     srand(0);
@@ -113,7 +113,7 @@ static double bench_fftw_2d(unsigned Nx, unsigned Ny, unsigned iterations, unsig
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = cfloat_create(real, imag);
     }
 
     double start_time = mufft_get_time();
@@ -133,9 +133,9 @@ static double bench_fftw_2d(unsigned Nx, unsigned Ny, unsigned iterations, unsig
 static double bench_fftw_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
 {
     float *input = fftwf_malloc(Nx * Ny * sizeof(float));
-    complex float *output = fftwf_malloc(Nx * Ny * sizeof(complex float));
+    cfloat *output = fftwf_malloc(Nx * Ny * sizeof(cfloat));
 
-    fftwf_plan plan = fftwf_plan_dft_r2c_2d(Ny, Nx, input, output, flags);
+    fftwf_plan plan = fftwf_plan_dft_r2c_2d(Ny, Nx, input, (fftwf_complex *)output, flags);
 
     srand(0);
     for (unsigned i = 0; i < Nx * Ny; i++)
@@ -160,17 +160,17 @@ static double bench_fftw_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations, u
 
 static double bench_fftw_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
 {
-    complex float *input = fftwf_malloc(Nx * Ny * sizeof(complex float));
+    cfloat *input = fftwf_malloc(Nx * Ny * sizeof(cfloat));
     float *output = fftwf_malloc(2 * Nx * Ny * sizeof(float));
 
-    fftwf_plan plan = fftwf_plan_dft_c2r_2d(Ny, Nx, input, output, flags);
+    fftwf_plan plan = fftwf_plan_dft_c2r_2d(Ny, Nx, (fftwf_complex *)input, output, flags);
 
     srand(0);
     for (unsigned i = 0; i < Nx * Ny; i++)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = cfloat_create(real, imag);
     }
 
     double start_time = mufft_get_time();
@@ -189,15 +189,15 @@ static double bench_fftw_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations, u
 
 static double bench_fft_1d(unsigned N, unsigned iterations, unsigned flags)
 {
-    complex float *input = mufft_alloc(N * sizeof(complex float));
-    complex float *output = mufft_alloc(N * sizeof(complex float));
+    cfloat *input = mufft_alloc(N * sizeof(cfloat));
+    cfloat *output = mufft_alloc(N * sizeof(cfloat));
 
     srand(0);
     for (unsigned i = 0; i < N; i++)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = cfloat_create(real, imag);
     }
 
     mufft_plan_1d *muplan = mufft_create_plan_1d_c2c(N, MUFFT_FORWARD, flags);
@@ -258,16 +258,16 @@ static double bench_fft_conv(unsigned N, unsigned iterations, unsigned flags)
 
 static double bench_fft_conv_stereo(unsigned N, unsigned iterations, unsigned flags)
 {
-    complex float *a = mufft_alloc(N * sizeof(complex float));
+    cfloat *a = mufft_alloc(N * sizeof(cfloat));
     float *b = mufft_alloc(N * sizeof(float));
-    complex float *output = mufft_alloc(2 * N * sizeof(complex float));
+    cfloat *output = mufft_alloc(2 * N * sizeof(cfloat));
 
     srand(0);
     for (unsigned i = 0; i < N; i++)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        a[i] = real + _Complex_I * imag;
+        a[i] = cfloat_create(real, imag);
         b[i] = (float)rand() / RAND_MAX - 0.5f;
     }
 
@@ -303,7 +303,7 @@ static double bench_fft_1d_real(unsigned N, unsigned iterations, unsigned flags)
     unsigned fftN = N / 2 + 1;
     float *input = mufft_alloc(N * sizeof(float));
     float *dummy = mufft_alloc(N * sizeof(float));
-    complex float *output = mufft_alloc(fftN * sizeof(complex float));
+    cfloat *output = mufft_alloc(fftN * sizeof(cfloat));
 
     srand(0);
     for (unsigned i = 0; i < N; i++)
@@ -337,7 +337,7 @@ static double bench_fft_1d_real_half(unsigned N, unsigned iterations, unsigned f
     unsigned fftN = N / 2 + 1;
     float *input = mufft_alloc((N / 2) * sizeof(float));
     float *dummy = mufft_alloc(N * sizeof(float));
-    complex float *output = mufft_alloc(fftN * sizeof(complex float));
+    cfloat *output = mufft_alloc(fftN * sizeof(cfloat));
 
     srand(0);
     for (unsigned i = 0; i < N / 2; i++)
@@ -368,15 +368,15 @@ static double bench_fft_1d_real_half(unsigned N, unsigned iterations, unsigned f
 
 static double bench_fft_2d(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
 {
-    complex float *input = mufft_alloc(Nx * Ny * sizeof(complex float));
-    complex float *output = mufft_alloc(Nx * Ny * sizeof(complex float));
+    cfloat *input = mufft_alloc(Nx * Ny * sizeof(cfloat));
+    cfloat *output = mufft_alloc(Nx * Ny * sizeof(cfloat));
 
     srand(0);
     for (unsigned i = 0; i < Nx * Ny; i++)
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = cfloat_create(real, imag);
     }
 
     mufft_plan_2d *muplan = mufft_create_plan_2d_c2c(Nx, Ny, MUFFT_FORWARD, flags);
@@ -398,7 +398,7 @@ static double bench_fft_2d(unsigned Nx, unsigned Ny, unsigned iterations, unsign
 static double bench_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
 {
     float *input = mufft_alloc(Nx * Ny * sizeof(float));
-    complex float *output = mufft_alloc(Nx * Ny * sizeof(complex float));
+    cfloat *output = mufft_alloc(Nx * Ny * sizeof(cfloat));
 
     srand(0);
     for (unsigned i = 0; i < Nx * Ny; i++)
@@ -425,7 +425,7 @@ static double bench_fft_2d_r2c(unsigned Nx, unsigned Ny, unsigned iterations, un
 
 static double bench_fft_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations, unsigned flags)
 {
-    complex float *input = mufft_alloc(Nx * Ny * sizeof(complex float));
+    cfloat *input = mufft_alloc(Nx * Ny * sizeof(cfloat));
     float *output = mufft_alloc(2 * Nx * Ny * sizeof(float));
 
     srand(0);
@@ -433,7 +433,7 @@ static double bench_fft_2d_c2r(unsigned Nx, unsigned Ny, unsigned iterations, un
     {
         float real = (float)rand() / RAND_MAX - 0.5f;
         float imag = (float)rand() / RAND_MAX - 0.5f;
-        input[i] = real + _Complex_I * imag;
+        input[i] = cfloat_create(real, imag);
     }
 
     mufft_plan_2d *muplan = mufft_create_plan_2d_c2r(Nx, Ny, flags);
