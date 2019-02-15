@@ -546,10 +546,24 @@ error:
     return NULL;
 }
 
-mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned method)
+mufft_convolve_func mufft_get_convolve_func(unsigned flags)
 {
     unsigned convolve_flags = mufft_get_cpu_flags() & ~(MUFFT_FLAG_CPU_NO_SIMD & flags);
 
+    for (unsigned i = 0; i < ARRAY_SIZE(convolve_table); i++)
+    {
+        const struct fft_convolve_step *step = &convolve_table[i];
+        if ((step->flags & convolve_flags) == step->flags)
+        {
+            return step->func;
+        }
+    }
+
+    return NULL;
+}
+
+mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned method)
+{
     if ((N & (N - 1)) != 0 || N == 1)
     {
         return NULL;
@@ -596,16 +610,7 @@ mufft_plan_conv *mufft_create_plan_conv(unsigned N, unsigned flags, unsigned met
         goto error;
     }
 
-    for (unsigned i = 0; i < ARRAY_SIZE(convolve_table); i++)
-    {
-        const struct fft_convolve_step *step = &convolve_table[i];
-        if ((step->flags & convolve_flags) == step->flags)
-        {
-            conv->convolve_func = step->func;
-            break;
-        }
-    }
-
+    conv->convolve_func = mufft_get_convolve_func(flags);
     if (conv->convolve_func == NULL)
     {
         goto error;

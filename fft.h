@@ -196,6 +196,15 @@ void mufft_execute_conv_output(mufft_plan_conv *plan, void *output, const void *
 
 /// \brief Free a previously allocated convolution plan obtained from \ref mufft_create_plan_conv.
 void mufft_free_plan_conv(mufft_plan_conv *plan);
+
+/// \brief Vector complex multiply routine signature
+typedef void (*mufft_convolve_func)(void *output, const void *a, const void *b,
+                                    float normalization, unsigned samples);
+
+/// \brief Gets a function pointer which implements complex multiplication (convolution in frequency domain).
+/// @param flags See \ref MUFFT_FLAG.
+/// @returns A function which can multiply complex numbers, or `NULL` if failed.
+mufft_convolve_func mufft_get_convolve_func(unsigned flags);
 /// @}
 
 /// \addtogroup MUFFT_2D 2D real and complex FFT

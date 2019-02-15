@@ -19,13 +19,18 @@
 #include "fft_internal.h"
 #include <math.h>
 
-void mufft_convolve_c(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b,
+static void mufft_convolve_inner_c(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b,
         float normalization, unsigned samples)
 {
     for (unsigned i = 0; i < samples; i++)
     {
         output[i] = cfloat_mul_scalar(normalization, cfloat_mul(a[i], b[i]));
     }
+}
+
+void mufft_convolve_c(void *output, const void *a, const void *b, float normalization, unsigned samples)
+{
+    mufft_convolve_inner_c(output, a, b, normalization, samples);
 }
 
 void mufft_resolve_c2r_c(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,

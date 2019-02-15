@@ -46,7 +46,9 @@
 /// Internal short definition of C99 complex float
 typedef struct cfloat
 {
+    /// The real value of a complex number.
     float real;
+    /// The imaginary value of a complex number.
     float imag;
 } cfloat;
 
@@ -114,15 +116,11 @@ typedef void (*mufft_2d_func)(void * MUFFT_RESTRICT output, const void * MUFFT_R
 /// Real-to-complex and complex-to-real resolve routine signature
 typedef void (*mufft_r2c_resolve_func)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned samples);
 
-/// Vector complex multiply routine signature
-typedef void (*mufft_convolve_func)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b,
-        float normalization, unsigned samples);
-
 /// Helper macro to mangle function signatures for specific SIMD instruction sets
 #define MANGLE(name, arch) mufft_ ## name ## _ ## arch
 
 /// Declares a mangled complex multiply function
-#define FFT_CONVOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT a, const cfloat * MUFFT_RESTRICT b, float normalization, unsigned samples);
+#define FFT_CONVOLVE_FUNC(name, arch) void MANGLE(name, arch) (void *output, const void *a, const void *b, float normalization, unsigned samples);
 
 /// Declares a mangled C2R-R2C resolve function
 #define FFT_RESOLVE_FUNC(name, arch) void MANGLE(name, arch) (cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input, const cfloat * MUFFT_RESTRICT twiddles, unsigned samples);

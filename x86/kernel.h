@@ -110,7 +110,7 @@ static inline MM cmul_ps(MM a, MM b)
     return addsub_ps(R0, R1);
 }
 
-void MANGLE(mufft_convolve)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input_a, const cfloat * MUFFT_RESTRICT input_b,
+static void MANGLE(mufft_convolve_inner)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input_a, const cfloat * MUFFT_RESTRICT input_b,
         float normalization, unsigned samples)
 {
     const MM n = splat_const_complex(normalization, normalization);
@@ -121,6 +121,12 @@ void MANGLE(mufft_convolve)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT
         MM res = mul_ps(cmul_ps(a, b), n);
         store_ps(&output[i], res);
     }
+}
+
+void MANGLE(mufft_convolve)(void *output, const void *input_a, const void *input_b,
+                            float normalization, unsigned samples)
+{
+	MANGLE(mufft_convolve_inner)(output, input_a, input_b, normalization, samples);
 }
 
 void MANGLE(mufft_resolve_c2r)(cfloat * MUFFT_RESTRICT output, const cfloat * MUFFT_RESTRICT input,
