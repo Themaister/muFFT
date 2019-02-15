@@ -22,6 +22,7 @@ endif()
 
 add_library(muFFT STATIC fft.c kernel.c cpu.c)
 target_compile_options(muFFT PRIVATE ${MUFFT_C_FLAGS})
+target_include_directories(muFFT PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
     target_compile_definitions(muFFT PRIVATE MUFFT_HAVE_X86)
